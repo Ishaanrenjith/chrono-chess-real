@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-websockets
-sqlalchemy
-pymysql
-pydantic
-httpx
