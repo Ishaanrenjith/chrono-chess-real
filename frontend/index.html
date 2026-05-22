@@ -1,0 +1,2276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chrono Chess - 3D Multiplayer Arena</title>
+
+    <!-- WebApp Manifest & Apple Touch Icons -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Chrono Chess">
+    <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDI0IDEwMjQiPgo8cmVjdCB3aWR0aD0iMTAyNCIgaGVpZ2h0PSIxMDI0IiBmaWxsPSIjMGEwYTBhIi8+CjxwYXRoIGQ9Ik01MTIgMjAwIEwyNTYgNTEyIEwzNDEuMzMzIDgxMC42NjcgTDY4Mi42NjcgODEwLjY2NyBMNzY4IDUxMiBaIiBmaWxsPSIjZWFiMzA4Ii8+Cjwvc3ZnPg==">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        neutral: {
+                            900: '#171717',
+                            950: '#0a0a0a',
+                        },
+                        yellow: {
+                            400: '#facc15',
+                            500: '#eab308',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- DOMPurify for XSS Protection -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Leaflet JS & CSS for Draggable Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Import Chess.js for logic -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+    <!-- Import Maps for Three.js (AR Engine) -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom dark theme for standard maps */
+        .dark-map { filter: invert(90%) hue-rotate(180deg) brightness(80%) contrast(80%); border: 0; width: 100%; height: 100%; }
+        .leaflet-layer, .leaflet-control-zoom-in, .leaflet-control-zoom-out, .leaflet-control-attribution { filter: invert(90%) hue-rotate(180deg) brightness(80%) contrast(80%); }
+        .scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .music-title-container { mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); }
+        .gps-pulse { animation: ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite; }
+        @keyframes ping { 75%, 100% { transform: scale(2.5); opacity: 0; } }
+        .map-interactive iframe { pointer-events: auto !important; }
+
+        /* Camera Rain Droplets Overlay */
+        @keyframes rain-drip {
+            0% { background-position: 0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px; }
+            100% { background-position: 10px 200px, -15px 150px, 5px 300px, -5px 250px, 20px 100px, -10px 350px; }
+        }
+        .glass-droplets {
+            position: absolute; inset: -20%; pointer-events: none; z-index: 15;
+            background-image: radial-gradient(circle at 15% 25%, rgba(200,220,255,0.4) 0%, rgba(200,220,255,0.1) 2px, transparent 3px), radial-gradient(circle at 75% 65%, rgba(200,220,255,0.5) 0%, rgba(200,220,255,0.1) 3px, transparent 5px), radial-gradient(circle at 45% 85%, rgba(200,220,255,0.3) 0%, rgba(200,220,255,0.1) 2px, transparent 4px), radial-gradient(circle at 85% 15%, rgba(200,220,255,0.6) 0%, rgba(200,220,255,0.2) 3px, transparent 6px), radial-gradient(circle at 25% 75%, rgba(200,220,255,0.4) 0%, rgba(200,220,255,0.1) 1.5px, transparent 2px), radial-gradient(circle at 95% 45%, rgba(200,220,255,0.5) 0%, rgba(200,220,255,0.1) 4px, transparent 6px);
+            background-size: 200px 200px, 150px 150px, 300px 300px, 250px 250px, 100px 100px, 350px 350px; filter: blur(0.5px) drop-shadow(0 4px 4px rgba(0,0,0,0.5)); opacity: 0; mix-blend-mode: hard-light; will-change: transform, opacity, background-position;
+        }
+        .is-raining .glass-droplets { animation: rain-drip 20s linear infinite; }
+
+        .glow-wood { box-shadow: 0 0 10px rgba(180, 83, 9, 0.4); border-color: rgba(180, 83, 9, 0.6); } .glow-stone { box-shadow: 0 0 10px rgba(168, 162, 158, 0.4); border-color: rgba(168, 162, 158, 0.6); } .glow-iron { box-shadow: 0 0 12px rgba(148, 163, 184, 0.4); border-color: rgba(148, 163, 184, 0.6); } .glow-bronze { box-shadow: 0 0 15px rgba(251, 146, 60, 0.4); border-color: rgba(251, 146, 60, 0.6); } .glow-silver { box-shadow: 0 0 15px rgba(209, 213, 219, 0.4); border-color: rgba(209, 213, 219, 0.6); } .glow-gold { box-shadow: 0 0 15px rgba(250, 204, 21, 0.5); border-color: rgba(250, 204, 21, 0.7); } .glow-platinum { box-shadow: 0 0 15px rgba(94, 234, 212, 0.5); border-color: rgba(94, 234, 212, 0.7); } .glow-diamond { box-shadow: 0 0 15px rgba(34, 211, 238, 0.6); border-color: rgba(34, 211, 238, 0.8); } .glow-master { box-shadow: 0 0 20px rgba(248, 113, 113, 0.6); border-color: rgba(248, 113, 113, 0.8); } .glow-national-master { box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); border-color: rgba(239, 68, 68, 0.8); } .glow-international-master { box-shadow: 0 0 22px rgba(192, 132, 252, 0.6); border-color: rgba(192, 132, 252, 0.8); } .glow-grandmaster { box-shadow: 0 0 25px rgba(168, 85, 247, 0.7); border-color: rgba(168, 85, 247, 0.9); } .glow-super-gm { box-shadow: 0 0 25px rgba(217, 70, 239, 0.7); border-color: rgba(217, 70, 239, 0.9); } .glow-legend { box-shadow: 0 0 25px rgba(99, 102, 241, 0.7); border-color: rgba(99, 102, 241, 0.9); } .glow-champion { box-shadow: 0 0 30px rgba(244, 63, 94, 0.8); border-color: rgba(244, 63, 94, 1); } .glow-premium { box-shadow: 0 0 20px rgba(250, 204, 21, 0.6); border-color: rgba(250, 204, 21, 1); }
+
+        .toast-msg { z-index: 1000 !important; }
+    </style>
+</head>
+<body class="bg-neutral-950 text-neutral-100 font-sans antialiased selection:bg-yellow-500/30 h-[100dvh] flex flex-col relative overflow-hidden">
+
+    <!-- LOADING VIEW -->
+    <div id="view-loading" class="flex-1 flex flex-col items-center justify-center text-yellow-500 relative z-10 h-full">
+        <i data-lucide="crown" class="h-12 w-12 animate-pulse mb-4"></i>
+        <p class="font-bold uppercase tracking-widest text-sm text-neutral-400">Loading Arena...</p>
+    </div>
+
+    <!-- ONBOARDING VIEW -->
+    <div id="view-onboarding" class="hidden flex-1 flex-col p-4 sm:p-6 relative z-10 h-full overflow-y-auto">
+        <div class="bg-neutral-900/80 backdrop-blur-xl border border-neutral-800 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl relative m-auto shrink-0">
+
+            <!-- STEP 1: AUTHENTICATION -->
+            <div id="onboard-step-auth" class="p-6 sm:p-8 text-center transition-opacity duration-300">
+                <div class="flex justify-center mb-4">
+                    <div class="relative flex items-center justify-center p-3 rounded-2xl bg-yellow-500/10 border border-yellow-500/30">
+                        <i data-lucide="crown" class="h-10 w-10 text-yellow-500"></i>
+                    </div>
+                </div>
+                <h1 class="text-3xl font-black text-white uppercase tracking-tight mb-2">Chrono<span class="text-yellow-500">Chess</span></h1>
+
+                <div class="grid grid-cols-2 gap-2.5 text-left text-[10px] sm:text-xs text-neutral-300 mb-6 bg-neutral-950/50 p-4 rounded-xl border border-neutral-800">
+                    <div class="flex items-center"><i data-lucide="move-3d" class="w-3 h-3 text-yellow-500 mr-2"></i> High-Res 3D Arena</div>
+                    <div class="flex items-center"><i data-lucide="radar" class="w-3 h-3 text-blue-500 mr-2"></i> Live Local Radar</div>
+                    <div class="flex items-center"><i data-lucide="globe" class="w-3 h-3 text-purple-500 mr-2"></i> Global Multiplayer</div>
+                    <div class="flex items-center"><i data-lucide="message-circle" class="w-3 h-3 text-green-500 mr-2"></i> Realtime Chat</div>
+                </div>
+
+                <div id="auth-error" class="hidden mb-4 text-red-500 text-sm font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/30 break-words"></div>
+
+                <div id="auth-form">
+                    <input type="email" id="input-email" placeholder="Email Address" class="w-full bg-neutral-950 border border-neutral-700 p-3 rounded-xl text-white outline-none focus:border-yellow-500 text-sm mb-3 font-bold text-center">
+                    <input type="password" id="input-password" placeholder="Password" class="w-full bg-neutral-950 border border-neutral-700 p-3 rounded-xl text-white outline-none focus:border-yellow-500 text-sm mb-4 font-bold text-center">
+
+                    <button onclick="app.handleEmailAuth()" id="btn-email-auth" class="w-full bg-yellow-500 text-neutral-900 py-3.5 rounded-xl font-bold text-base sm:text-lg hover:bg-yellow-400 transition-colors flex justify-center items-center shadow-md mb-3">
+                        Sign In
+                    </button>
+                    <button onclick="app.toggleAuthMode()" id="btn-toggle-auth" class="text-xs text-neutral-400 hover:text-white transition-colors uppercase tracking-wider font-bold">
+                        Need an account? Sign Up
+                    </button>
+                </div>
+
+                <div class="flex items-center my-5">
+                    <div class="flex-1 border-t border-neutral-800"></div>
+                    <span class="px-3 text-xs font-bold text-neutral-500 uppercase tracking-wider">OR</span>
+                    <div class="flex-1 border-t border-neutral-800"></div>
+                </div>
+
+                <button onclick="app.handleGoogleSignIn()" class="w-full bg-neutral-800 text-white py-3 rounded-xl font-bold text-sm hover:bg-neutral-700 transition-colors flex justify-center items-center shadow-md border border-neutral-700 mb-3">
+                    <svg class="w-4 h-4 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                    Sign in with Google
+                </button>
+
+                <button onclick="app.handleGuestPlay()" id="btn-guest-play" class="w-full text-xs font-bold text-neutral-500 hover:text-white uppercase tracking-wider py-2 transition-colors">
+                    Play as Guest
+                </button>
+            </div>
+
+            <!-- STEP 2: PROFILE CREATION -->
+            <div id="onboard-step-profile" class="hidden p-6 sm:p-8 text-center transition-opacity duration-300">
+                <div class="flex justify-center mb-4">
+                    <div class="relative flex items-center justify-center p-3 rounded-2xl bg-blue-500/10 border border-blue-500/30">
+                        <i data-lucide="user" class="h-10 w-10 text-blue-500"></i>
+                    </div>
+                </div>
+                <h2 class="text-2xl font-black text-white uppercase tracking-tight mb-2">Create <span class="text-blue-500">Profile</span></h2>
+                <p class="text-sm text-neutral-400 mb-6">Choose a display name to represent you on the radar.</p>
+
+                <div id="profile-error" class="hidden mb-4 text-red-500 text-sm font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/30 break-words"></div>
+
+                <input type="text" id="input-username" placeholder="Enter Display Name" class="w-full bg-neutral-950 border border-neutral-700 p-3 rounded-xl text-white outline-none focus:border-blue-500 text-sm mb-4 font-bold text-center">
+
+                <button onclick="app.handleConnect()" id="btn-connect" class="w-full bg-white text-neutral-900 py-3.5 rounded-xl font-bold text-base sm:text-lg hover:bg-neutral-200 transition-colors flex justify-center items-center shadow-md">
+                    Enter Arena
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MAIN APP VIEW -->
+    <div id="view-main" class="hidden flex-1 flex flex-col relative z-10 h-full min-h-0">
+        <!-- Navigation -->
+        <nav class="fixed top-0 w-full z-40 bg-neutral-900/90 backdrop-blur-xl border-b border-neutral-800 shadow-md pointer-events-auto">
+            <div class="w-full px-4 sm:px-6">
+                <div class="flex justify-between items-center h-20 gap-2 overflow-x-auto scrollbar-hide">
+                    <div class="flex items-center cursor-pointer group shrink-0 min-w-0 mr-2 pointer-events-auto" onclick="app.setView('arena')" title="3D Arena">
+                        <div class="relative flex items-center justify-center p-2 rounded-lg mr-2 text-yellow-500 group-hover:scale-110 transition-transform shrink-0">
+                            <i data-lucide="crown" class="h-6 w-6 sm:h-7 sm:w-7 relative z-10"></i>
+                        </div>
+                        <span class="font-black text-2xl sm:text-3xl text-white tracking-tight uppercase hidden lg:inline truncate min-w-0 drop-shadow-md">Chrono<span class="text-yellow-500">Chess</span></span>
+                    </div>
+
+                    <div class="flex items-center space-x-3 sm:space-x-4 shrink-0 ml-auto pointer-events-auto">
+                        <button onclick="app.setView('arena')" class="relative flex items-center font-bold text-neutral-400 hover:text-white transition-colors shrink-0 px-1 py-2" id="nav-arena-btn" title="3D Arena"><i data-lucide="move-3d" class="h-6 w-6 sm:h-7 sm:w-7 sm:mr-1.5 shrink-0"></i><span class="hidden sm:inline truncate text-base">Arena</span></button>
+                        <button onclick="app.setView('radar')" class="relative flex items-center font-bold text-neutral-400 hover:text-white transition-colors shrink-0 px-1 py-2" id="nav-radar-btn" title="Local Radar"><i data-lucide="radar" class="h-6 w-6 sm:h-7 sm:w-7 sm:mr-1.5 shrink-0"></i><span class="hidden sm:inline truncate text-base">Radar</span></button>
+                        <button id="nav-pro-btn" onclick="app.openPremiumPromo()" class="relative flex items-center font-black text-neutral-900 bg-gradient-to-r from-yellow-400 to-yellow-600 hover:from-yellow-300 hover:to-yellow-500 transition-colors shrink-0 px-3 py-1.5 rounded-lg shadow-[0_0_10px_rgba(234,179,8,0.4)] text-xs uppercase tracking-wider" title="Upgrade to PRO"><i data-lucide="sparkles" class="h-4 w-4 sm:mr-1 shrink-0"></i><span class="hidden sm:inline truncate">PRO</span></button>
+                        <button onclick="app.openLeaderboard()" class="relative flex items-center font-bold text-neutral-400 hover:text-white transition-colors shrink-0 px-1 py-2" id="nav-leaderboard-btn" title="Leaderboard"><i data-lucide="bar-chart-2" class="h-6 w-6 sm:h-7 sm:w-7 sm:mr-1.5 shrink-0"></i><span class="hidden sm:inline truncate text-base">Ranks</span></button>
+                        <button onclick="app.setView('messages')" class="relative flex items-center font-bold text-neutral-400 hover:text-white transition-colors shrink-0 px-1 py-2" id="nav-messages-btn" title="Messages"><i data-lucide="message-square" class="h-6 w-6 sm:h-7 sm:w-7 sm:mr-1.5 shrink-0"></i><span class="hidden sm:inline truncate text-base">Inbox</span><span id="unread-badge" class="hidden absolute -top-1 -right-1 sm:-right-2 bg-red-500 text-white text-[11px] font-black px-2 py-0.5 rounded-full border-2 border-neutral-900">0</span></button>
+                        <div onclick="app.openEditor()" id="nav-avatar" class="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-yellow-500 flex items-center justify-center text-neutral-950 font-black text-lg cursor-pointer shadow-[0_0_15px_rgba(234,179,8,0.4)] hover:scale-105 transition-transform bg-cover bg-center shrink-0 ml-1 sm:ml-2 border-2 border-neutral-800 relative" title="Edit My Profile">M</div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="flex-1 min-h-0 relative flex flex-col h-[calc(100dvh)]" id="main-content"></main>
+    </div>
+
+    <div id="modals-container" class="relative z-50"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+        import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+
+        // Keep Firebase only for Authentication (generating UIDs)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // Environment variables / Firebase setup
+        const fbConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyBVfZ0hg-YusIB0K208Bsf2iqwEaqFZGRI",
+            authDomain: "chess-d94d5.firebaseapp.com",
+            projectId: "chess-d94d5"
+        };
+
+        let firebaseApp, auth;
+        try {
+            firebaseApp = initializeApp(fbConfig);
+            auth = getAuth(firebaseApp);
+        } catch (e) {
+            console.warn("Initialization issue with Firebase.");
+        }
+
+        // ==========================================
+        // BACKEND API CONNECTION CONFIGURATION
+        // ==========================================
+        const isLocalFile = window.location.protocol === 'file:' || window.location.port === '5500' || window.location.port === '3000';
+        const isLocalHost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+
+        let API_BASE = "/api";
+        let WS_BASE = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
+
+        // If running locally or within the Canvas iframe (blob:), default to local backend
+        if (isLocalFile || window.location.protocol === 'blob:' || isLocalHost) {
+            API_BASE = "http://127.0.0.1:8000/api";
+            WS_BASE = "ws://127.0.0.1:8000/ws";
+        }
+
+        let ws = null;
+        let gpsPingInterval = null;
+
+        const state = {
+            user: null,
+            myProfile: null,
+            players: [],
+            messages: [],
+            currentView: 'loading',
+            mainSubView: 'arena',
+            selectedPlayer: null,
+            radarFilters: { radius: '0.5', rankedMode: false, customRange: '10' },
+            premiumPromoOpen: false,
+            rankedPromoOpen: false,
+            editorData: null,
+            activeGame: null,
+            pendingGameId: null,
+            activeChat: null,
+            matchFormData: null,
+            quickChatOpen: false
+        };
+
+        window.app = {};
+
+        // ==========================================
+        // WEBSOCKET LOGIC (Connecting to FastAPI)
+        // ==========================================
+        function initWebSocket(uid) {
+            if (ws) ws.close();
+            try {
+                ws = new WebSocket(`${WS_BASE}/${uid}`);
+                ws.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'RADAR_UPDATE') {
+                        app.fetchPlayers();
+                    } else if (msg.type === 'SERVER_ANNOUNCEMENT') {
+                        app.showToast("SERVER: " + msg.data, false);
+                    } else if (msg.type === 'NEW_MATCH_REQUEST' || msg.type === 'CHAT_UPDATE' || msg.type === 'MESSAGE_UPDATED') {
+                        app.fetchMessages();
+
+                        // Sync Game State via Hidden Chat Messages
+                        if (msg.type === 'CHAT_UPDATE' && state.activeGame && msg.messageId === state.activeGame.id) {
+                            if (msg.chat && msg.chat.text && msg.chat.text.startsWith('FEN:')) {
+                                const fen = msg.chat.text.substring(4);
+                                if (app.ar.game && app.ar.game.fen() !== fen) {
+                                    app.ar.game.load(fen);
+                                    syncBoardToGameAR();
+                                    app.updateGameStatusAR();
+                                    app.audio.playMoveSound(false, app.ar.game.in_check());
+                                    if (!app.clock.isRunning && !app.ar.game.game_over()) app.startClock();
+                                    if (app.ar.game.game_over()) app.showGameOverBanner();
+                                }
+                            } else if (msg.chat && msg.chat.text && msg.chat.text.startsWith('QUICK:')) {
+                                // Extract Quick Chat phrase
+                                const phrase = msg.chat.text.substring(6);
+                                const senderName = msg.chat.senderId === state.user.uid ? 'You' : 'Opponent';
+                                // Display as a non-error toast
+                                app.showToast(`${senderName}: ${phrase}`, false);
+                            }
+                        }
+                    }
+                };
+                ws.onclose = () => { setTimeout(() => { if(state.user) initWebSocket(uid); }, 3000); };
+                ws.onerror = (e) => { console.warn("WebSocket connection error"); };
+
+                if(gpsPingInterval) clearInterval(gpsPingInterval);
+                gpsPingInterval = setInterval(() => {
+                    if (ws && ws.readyState === WebSocket.OPEN && state.myProfile && state.myProfile.coords) {
+                        ws.send(JSON.stringify({ type: "GPS_PING", coords: state.myProfile.coords }));
+                    }
+                }, 10000);
+
+            } catch (err) {
+                console.warn("WebSocket failed to construct:", err.message);
+                setTimeout(() => { if(state.user) initWebSocket(uid); }, 5000);
+            }
+        }
+
+        window.addEventListener('beforeunload', () => {
+            if (ws) { ws.onclose = null; ws.close(); }
+            if (state.user && state.myProfile && state.myProfile.isOnline) {
+                try { navigator.sendBeacon(`${API_BASE}/players/${state.user.uid}`, JSON.stringify({ isOnline: false })); } catch(e) {}
+            }
+        });
+
+        // ==========================================
+        // DUAL CHESS CLOCK LOGIC & STATE
+        // ==========================================
+        app.clock = {
+            whiteTime: 600,
+            blackTime: 600,
+            lastTime: 0,
+            isRunning: false,
+            textureW: null, textureB: null, ctxW: null, ctxB: null, buttonW: null, buttonB: null
+        };
+
+        app.formatTime = (seconds) => {
+            const m = Math.floor(Math.max(0, seconds) / 60);
+            const s = Math.floor(Math.max(0, seconds) % 60);
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        };
+
+        app.startClock = () => {
+            app.clock.isRunning = true;
+            app.clock.lastTime = performance.now();
+        };
+
+        app.stopClock = () => {
+            app.clock.isRunning = false;
+        };
+
+        app.resetClock = () => {
+            app.clock.whiteTime = 600;
+            app.clock.blackTime = 600;
+            app.clock.isRunning = false;
+            app.updateClockUI();
+        };
+
+        app.tickClock = () => {
+            if (!app.clock.isRunning) return;
+
+            // Stop if game is over
+            if (app.ar.game && app.ar.game.game_over()) {
+                app.stopClock();
+                return;
+            }
+
+            const now = performance.now();
+            const delta = (now - app.clock.lastTime) / 1000;
+            app.clock.lastTime = now;
+
+            const turn = app.ar.game.turn();
+            if (turn === 'w') {
+                app.clock.whiteTime -= delta;
+                if (app.clock.whiteTime <= 0) {
+                    app.clock.whiteTime = 0;
+                    app.handleTimeout('w');
+                }
+            } else {
+                app.clock.blackTime -= delta;
+                if (app.clock.blackTime <= 0) {
+                    app.clock.blackTime = 0;
+                    app.handleTimeout('b');
+                }
+            }
+            app.updateClockUI();
+        };
+
+        app.handleTimeout = (color) => {
+            app.stopClock();
+            app.showGameOverBanner(color === 'w' ? 'b' : 'w');
+        };
+
+        app.updateClockUI = () => {
+            const timeW = app.formatTime(app.clock.whiteTime);
+            const timeB = app.formatTime(app.clock.blackTime);
+
+            const isWhiteTurn = app.ar.game ? app.ar.game.turn() === 'w' : true;
+            const myColor = state.activeGame ? state.activeGame.myColor : 'w';
+
+            const topIsWhite = myColor === 'b';
+            const topTime = topIsWhite ? timeW : timeB;
+            const bottomTime = topIsWhite ? timeB : timeW;
+
+            const topActive = app.clock.isRunning && (topIsWhite ? isWhiteTurn : !isWhiteTurn);
+            const bottomActive = app.clock.isRunning && (topIsWhite ? !isWhiteTurn : isWhiteTurn);
+
+            // Update 2D UI
+            const topTimeEl = getEl('ui-clock-top-time');
+            const bottomTimeEl = getEl('ui-clock-bottom-time');
+            const topContainer = getEl('ui-clock-top-container');
+            const bottomContainer = getEl('ui-clock-bottom-container');
+
+            if (topTimeEl) topTimeEl.innerText = topTime;
+            if (bottomTimeEl) bottomTimeEl.innerText = bottomTime;
+
+            if (topContainer && bottomContainer) {
+                if (topActive) {
+                    topContainer.classList.add('border-yellow-500', 'shadow-[0_0_20px_rgba(234,179,8,0.4)]', 'scale-105');
+                    topContainer.classList.remove('border-neutral-700', 'scale-100');
+                    topTimeEl.classList.add('text-yellow-500'); topTimeEl.classList.remove('text-neutral-300');
+                } else {
+                    topContainer.classList.remove('border-yellow-500', 'shadow-[0_0_20px_rgba(234,179,8,0.4)]', 'scale-105');
+                    topContainer.classList.add('border-neutral-700', 'scale-100');
+                    topTimeEl.classList.remove('text-yellow-500'); topTimeEl.classList.add('text-neutral-300');
+                }
+
+                if (bottomActive) {
+                    bottomContainer.classList.add('border-yellow-500', 'shadow-[0_0_20px_rgba(234,179,8,0.4)]', 'scale-105');
+                    bottomContainer.classList.remove('border-neutral-700', 'scale-100');
+                    bottomTimeEl.classList.add('text-yellow-500'); bottomTimeEl.classList.remove('text-white', 'text-neutral-300');
+                } else {
+                    bottomContainer.classList.remove('border-yellow-500', 'shadow-[0_0_20px_rgba(234,179,8,0.4)]', 'scale-105');
+                    bottomContainer.classList.add('border-neutral-700', 'scale-100');
+                    bottomTimeEl.classList.remove('text-yellow-500'); bottomTimeEl.classList.add('text-white');
+                }
+            }
+
+            // Update 3D Canvas Textures
+            if (app.clock.ctxW && app.clock.textureW) {
+                const ctx = app.clock.ctxW;
+                ctx.fillStyle = isWhiteTurn && app.clock.isRunning ? '#eab308' : '#333333';
+                ctx.fillRect(0, 0, 128, 64);
+                ctx.fillStyle = isWhiteTurn && app.clock.isRunning ? '#111111' : '#aaaaaa';
+                ctx.font = 'bold 36px monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(timeW, 64, 32);
+                app.clock.textureW.needsUpdate = true;
+            }
+            if (app.clock.ctxB && app.clock.textureB) {
+                const ctx = app.clock.ctxB;
+                ctx.fillStyle = !isWhiteTurn && app.clock.isRunning ? '#eab308' : '#333333';
+                ctx.fillRect(0, 0, 128, 64);
+                ctx.fillStyle = !isWhiteTurn && app.clock.isRunning ? '#111111' : '#aaaaaa';
+                ctx.font = 'bold 36px monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(timeB, 64, 32);
+                app.clock.textureB.needsUpdate = true;
+            }
+
+            // Animate Physical 3D Buttons
+            if (app.clock.buttonW && app.clock.buttonB) {
+                app.clock.buttonW.position.y = isWhiteTurn && app.clock.isRunning ? 0.05 : 0.035;
+                app.clock.buttonB.position.y = !isWhiteTurn && app.clock.isRunning ? 0.05 : 0.035;
+            }
+        };
+
+        const initAuth = async () => {
+            if (!auth) return;
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            }
+        };
+
+        // ==========================================
+        // LOCAL AI BOT LOGIC (MINIMAX + ALPHA-BETA via WEB WORKER)
+        // ==========================================
+        const botWorkerCode = `
+            importScripts('https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js');
+            const pieceValues = { p: 10, n: 30, b: 30, r: 50, q: 90, k: 900 };
+
+            const pawnEvalWhite = [
+                [0,  0,  0,  0,  0,  0,  0,  0],
+                [5,  5,  5,  5,  5,  5,  5,  5],
+                [1,  1,  2,  3,  3,  2,  1,  1],
+                [0.5,  0.5,  1,  2.5,  2.5,  1,  0.5,  0.5],
+                [0,  0,  0,  2,  2,  0,  0,  0],
+                [0.5, -0.5,-1,  0,  0, -1, -0.5,  0.5],
+                [0.5,  1, 1,  -2, -2,  1,  1,  0.5],
+                [0,  0,  0,  0,  0,  0,  0,  0]
+            ];
+            const knightEval = [
+                [-5, -4, -3, -3, -3, -3, -4, -5],
+                [-4, -2,  0,  0.5,  0.5,  0, -2, -4],
+                [-3,  0,  1,  1.5,  1.5,  1,  0, -3],
+                [-3,  0.5,  1.5,  2,  2,  1.5,  0.5, -3],
+                [-3,  0,  1.5,  2,  2,  1.5,  0, -3],
+                [-3,  0.5,  1,  1.5,  1.5,  1,  0.5, -3],
+                [-4, -2,  0,  0.5,  0.5,  0, -2, -4],
+                [-5, -4, -3, -3, -3, -3, -4, -5]
+            ];
+
+            function evaluateBoard(game) {
+                let evalScore = 0; const board = game.board();
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        const piece = board[r][c];
+                        if (piece) {
+                            let val = pieceValues[piece.type];
+                            if (piece.type === 'p') val += (piece.color === 'w' ? pawnEvalWhite[r][c] : pawnEvalWhite[7-r][c]);
+                            else if (piece.type === 'n') val += knightEval[r][c];
+                            else if (piece.type === 'b' || piece.type === 'q') val += (r > 2 && r < 5 && c > 2 && c < 5) ? 1.5 : 0;
+                            evalScore += (piece.color === 'w') ? val : -val;
+                        }
+                    }
+                }
+                return evalScore;
+            }
+
+            function minimax(game, depth, alpha, beta, isMaximizingPlayer) {
+                if (depth === 0 || game.game_over()) return evaluateBoard(game);
+                const moves = game.moves({ verbose: true });
+                moves.sort((a, b) => {
+                    let scoreA = (a.captured ? pieceValues[a.captured] : 0) + (a.flags.includes('p') ? 80 : 0);
+                    let scoreB = (b.captured ? pieceValues[b.captured] : 0) + (b.flags.includes('p') ? 80 : 0);
+                    return scoreB - scoreA;
+                });
+
+                if (isMaximizingPlayer) {
+                    let bestVal = -Infinity;
+                    for (let i = 0; i < moves.length; i++) {
+                        game.move(moves[i].san);
+                        bestVal = Math.max(bestVal, minimax(game, depth - 1, alpha, beta, false));
+                        game.undo();
+                        alpha = Math.max(alpha, bestVal); if (beta <= alpha) break;
+                    }
+                    return bestVal;
+                } else {
+                    let bestVal = Infinity;
+                    for (let i = 0; i < moves.length; i++) {
+                        game.move(moves[i].san);
+                        bestVal = Math.min(bestVal, minimax(game, depth - 1, alpha, beta, true));
+                        game.undo();
+                        beta = Math.min(beta, bestVal); if (beta <= alpha) break;
+                    }
+                    return bestVal;
+                }
+            }
+
+            self.onmessage = function(e) {
+                const { fen, depth } = e.data; const game = new Chess(fen); const moves = game.moves({ verbose: true });
+                if (moves.length === 0) { self.postMessage({ bestMove: null }); return; }
+                moves.sort((a, b) => {
+                    let scoreA = (a.captured ? pieceValues[a.captured] : 0) + (a.flags.includes('p') ? 80 : 0);
+                    let scoreB = (b.captured ? pieceValues[b.captured] : 0) + (b.flags.includes('p') ? 80 : 0);
+                    return (scoreB - scoreA) || (Math.random() - 0.5);
+                });
+
+                const isMaximizing = game.turn() === 'w';
+                let bestMove = null; let bestVal = isMaximizing ? -Infinity : Infinity;
+
+                for (let i = 0; i < moves.length; i++) {
+                    game.move(moves[i].san);
+                    const boardVal = minimax(game, depth - 1, -Infinity, Infinity, !isMaximizing);
+                    game.undo();
+
+                    if (isMaximizing) {
+                        if (boardVal > bestVal) { bestVal = boardVal; bestMove = moves[i]; }
+                    } else {
+                        if (boardVal < bestVal) { bestVal = boardVal; bestMove = moves[i]; }
+                    }
+                }
+                if (!bestMove) bestMove = moves[0];
+                self.postMessage({ bestMove });
+            };
+        `;
+
+        app.bot = {
+            isThinking: false, depth: 3, worker: null,
+            init: function() {
+                const blob = new Blob([botWorkerCode], { type: 'application/javascript' });
+                this.worker = new Worker(URL.createObjectURL(blob));
+                this.worker.onmessage = (e) => {
+                    const { bestMove } = e.data;
+                    if (bestMove) app.executeMoveAR(bestMove, true).then(() => this.isThinking = false);
+                    else this.isThinking = false;
+                };
+            },
+            makeMove: function() {
+                if (app.ar.game.game_over() || this.isThinking) return;
+                this.isThinking = true; app.updateGameStatusAR("AI is thinking...");
+                if (!this.worker) this.init();
+                setTimeout(() => this.worker.postMessage({ fen: app.ar.game.fen(), depth: this.depth }), 100);
+            }
+        };
+
+        // --- GLOBAL 360 / AR ARENA STATE ---
+        app.ar = {
+            scene: null, camera: null, renderer: null, controls: null, boardGroup: null, highlightGroup: null, tableGroup: null, clockGroup: null,
+            game: null, pieceMeshes: {}, capturedMeshes: [], capturedCount: {w:0, b:0}, selectedSquare: null, currentLegalMoves: {}, raycaster: new THREE.Raycaster(), mouse: new THREE.Vector2(),
+            stream: null, pointerDownTime: 0, animationId: null, squareSize: 0.1, isAnimating: false,
+            rgbeLoader: new RGBELoader().setCrossOrigin('anonymous'), textureLoader: new THREE.TextureLoader().setCrossOrigin('anonymous'),
+            pmremGenerator: null, studioEnvironment: null, currentSceneUrl: '', lights: null, rainSystem: null
+        };
+        app.ar.sharedMats = null; app.ar.sharedGeos = null;
+
+        app.audio = {
+            ctx: null, isAmbientPlaying: false, nodes: [], birdTimeout: null,
+            init: function() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); if (this.ctx.state === 'suspended') this.ctx.resume(); },
+            createNoiseBuffer: function() { const bSize = this.ctx.sampleRate * 2; const b = this.ctx.createBuffer(1, bSize, this.ctx.sampleRate); const out = b.getChannelData(0); for (let i = 0; i < bSize; i++) out[i] = Math.random() * 2 - 1; return b; },
+            playWaves: function() { const n = this.ctx.createBufferSource(); n.buffer = this.createNoiseBuffer(); n.loop = true; const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 1; const lF = this.ctx.createOscillator(); lF.type = 'sine'; lF.frequency.value = 0.12; const lFG = this.ctx.createGain(); lFG.gain.value = 600; lF.connect(lFG); lFG.connect(f.frequency); f.frequency.value = 800; const g = this.ctx.createGain(); const lG = this.ctx.createOscillator(); lG.type = 'sine'; lG.frequency.value = 0.12; const lGG = this.ctx.createGain(); lGG.gain.value = 0.15; lG.connect(lGG); lGG.connect(g.gain); g.gain.value = 0.2; n.connect(f); f.connect(g); g.connect(this.ctx.destination); n.start(); lF.start(); lG.start(); this.nodes.push(n, lF, lG); },
+            playBirds: function() { const s = this; function chirp() { if (!s.isAmbientPlaying) return; const o = s.ctx.createOscillator(); const g = s.ctx.createGain(); o.connect(g); g.connect(s.ctx.destination); o.type = 'sine'; const t = s.ctx.currentTime; const sF = 2000 + Math.random() * 1500; o.frequency.setValueAtTime(sF, t); o.frequency.exponentialRampToValueAtTime(sF + 800, t + 0.1); o.frequency.exponentialRampToValueAtTime(sF - 400, t + 0.2); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.08, t + 0.05); g.gain.linearRampToValueAtTime(0, t + 0.2); o.start(t); o.stop(t + 0.25); s.birdTimeout = setTimeout(chirp, Math.random() * 5000 + 1000); } chirp(); },
+            playCityHum: function() { const n = this.ctx.createBufferSource(); n.buffer = this.createNoiseBuffer(); n.loop = true; const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 150; const g = this.ctx.createGain(); g.gain.value = 0.4; n.connect(f); f.connect(g); g.connect(this.ctx.destination); n.start(); this.nodes.push(n); },
+            stopAmbient: function() { this.nodes.forEach(n => { try { n.stop(); } catch(e){} try { n.disconnect(); } catch(e){} }); this.nodes = []; if (this.birdTimeout) clearTimeout(this.birdTimeout); },
+            updateAmbientForScene: function(url) { this.stopAmbient(); if (!this.isAmbientPlaying) return; if (!this.ctx) this.init(); const name = (url || '').toLowerCase(); let title = "Silent Room Tone"; if (name.includes('venice') || name.includes('lake') || name.includes('quarry') || name.includes('greenwich')) { this.playWaves(); title = "Nature Sounds"; } if (name.includes('esplanade') || name.includes('quarry') || name.includes('lake') || name.includes('park')) { this.playBirds(); title = title === "Silent Room Tone" ? "Nature & Birds" : title + " & Birds"; } if (name.includes('city') || name.includes('overpass') || name.includes('street')) { this.playCityHum(); title = "Distant City Traffic"; } const titleEl = document.getElementById('music-title'); if(titleEl) titleEl.innerText = title; },
+            toggleAmbient: function() { this.init(); if (this.isAmbientPlaying) { this.isAmbientPlaying = false; this.stopAmbient(); document.getElementById('icon-play-pause').setAttribute('data-lucide', 'play'); document.getElementById('music-visualizer').classList.remove('text-yellow-500', 'animate-pulse'); document.getElementById('music-visualizer').classList.add('text-neutral-600'); document.getElementById('music-title').innerText = "Ambient Audio Paused"; lucide.createIcons(); } else { this.isAmbientPlaying = true; this.updateAmbientForScene(app.ar.currentSceneUrl); document.getElementById('icon-play-pause').setAttribute('data-lucide', 'pause'); document.getElementById('music-visualizer').classList.remove('text-neutral-600'); document.getElementById('music-visualizer').classList.add('text-yellow-500', 'animate-pulse'); lucide.createIcons(); } },
+            playMoveSound: function(isCapture, isCheck) { if (!this.ctx) return; const t = this.ctx.currentTime; const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain(); osc.connect(gain); gain.connect(this.ctx.destination); osc.type = 'sine'; osc.frequency.setValueAtTime(120, t); osc.frequency.exponentialRampToValueAtTime(30, t + 0.1); gain.gain.setValueAtTime(isCapture ? 1.5 : 1.0, t); gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1); osc.start(t); osc.stop(t + 0.1); const clack = this.ctx.createOscillator(); const clackGain = this.ctx.createGain(); clack.connect(clackGain); clackGain.connect(this.ctx.destination); clack.type = 'square'; clack.frequency.setValueAtTime(isCapture ? 800 : 400, t); clack.frequency.exponentialRampToValueAtTime(100, t + 0.05); clackGain.gain.setValueAtTime(isCapture ? 0.6 : 0.15, t); clackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.05); clack.start(t); clack.stop(t + 0.05); if (isCheck) { const bell = this.ctx.createOscillator(); const bellGain = this.ctx.createGain(); bell.connect(bellGain); bellGain.connect(this.ctx.destination); bell.type = 'sine'; bell.frequency.setValueAtTime(880, t); bellGain.gain.setValueAtTime(0, t); bellGain.gain.linearRampToValueAtTime(0.3, t + 0.05); bellGain.gain.exponentialRampToValueAtTime(0.001, t + 1.5); bell.start(t); bell.stop(t + 1.5); } }
+        };
+        window.toggleAmbient = () => app.audio.toggleAmbient();
+
+        app.clean = (str) => typeof str === 'string' ? DOMPurify.sanitize(str) : str;
+
+        app.getRank = (elo) => {
+            if (!elo || elo < 600) return { name: 'Wood', icon: 'tree-pine', color: 'text-amber-700', bg: 'bg-amber-900/20', border: 'border-amber-800/30', glow: 'glow-wood', min: 0, next: 600 };
+            if (elo < 800) return { name: 'Stone', icon: 'box', color: 'text-stone-400', bg: 'bg-stone-500/20', border: 'border-stone-500/30', glow: 'glow-stone', min: 600, next: 800 };
+            if (elo < 1000) return { name: 'Iron', icon: 'anvil', color: 'text-slate-400', bg: 'bg-slate-500/20', border: 'border-slate-500/30', glow: 'glow-iron', min: 800, next: 1000 };
+            if (elo < 1100) return { name: 'Bronze', icon: 'shield', color: 'text-orange-400', bg: 'bg-orange-400/20', border: 'border-orange-400/30', glow: 'glow-bronze', min: 1000, next: 1100 };
+            if (elo < 1200) return { name: 'Bronze Elite', icon: 'shield-alert', color: 'text-orange-500', bg: 'bg-orange-500/20', border: 'border-orange-500/30', glow: 'glow-bronze', min: 1100, next: 1200 };
+            if (elo < 1300) return { name: 'Silver', icon: 'shield', color: 'text-gray-300', bg: 'bg-gray-300/20', border: 'border-gray-300/30', glow: 'glow-silver', min: 1200, next: 1300 };
+            if (elo < 1400) return { name: 'Silver Elite', icon: 'shield-check', color: 'text-gray-200', bg: 'bg-gray-200/20', border: 'border-gray-200/30', glow: 'glow-silver', min: 1300, next: 1400 };
+            if (elo < 1500) return { name: 'Gold', icon: 'sun', color: 'text-yellow-400', bg: 'bg-yellow-400/20', border: 'border-yellow-400/30', glow: 'glow-gold', min: 1400, next: 1500 };
+            if (elo < 1600) return { name: 'Gold Elite', icon: 'sun-medium', color: 'text-yellow-500', bg: 'bg-yellow-500/20', border: 'border-yellow-500/30', glow: 'glow-gold', min: 1500, next: 1600 };
+            if (elo < 1700) return { name: 'Platinum', icon: 'target', color: 'text-teal-300', bg: 'bg-teal-300/20', border: 'border-teal-300/30', glow: 'glow-platinum', min: 1600, next: 1700 };
+            if (elo < 1800) return { name: 'Platinum Elite', icon: 'crosshair', color: 'text-teal-400', bg: 'bg-teal-400/20', border: 'border-teal-400/30', glow: 'glow-platinum', min: 1700, next: 1800 };
+            if (elo < 1900) return { name: 'Diamond', icon: 'hexagon', color: 'text-cyan-400', bg: 'bg-cyan-400/20', border: 'border-cyan-400/30', glow: 'glow-diamond', min: 1800, next: 1900 };
+            if (elo < 2000) return { name: 'Diamond Elite', icon: 'gem', color: 'text-cyan-500', bg: 'bg-cyan-500/20', border: 'border-cyan-500/30', glow: 'glow-diamond', min: 1900, next: 2000 };
+            if (elo < 2100) return { name: 'Master', icon: 'award', color: 'text-red-400', bg: 'bg-red-400/20', border: 'border-red-400/30', glow: 'glow-master', min: 2000, next: 2100 };
+            if (elo < 2200) return { name: 'Nat. Master', icon: 'medal', color: 'text-red-500', bg: 'bg-red-500/20', border: 'border-red-500/30', glow: 'glow-national-master', min: 2100, next: 2200 };
+            if (elo < 2300) return { name: 'Int. Master', icon: 'crown', color: 'text-purple-400', bg: 'bg-purple-400/20', border: 'border-purple-400/30', glow: 'glow-international-master', min: 2200, next: 2300 };
+            if (elo < 2400) return { name: 'Grandmaster', icon: 'crown', color: 'text-purple-500', bg: 'bg-purple-500/20', border: 'border-purple-500/30', glow: 'glow-grandmaster', min: 2300, next: 2400 };
+            if (elo < 2500) return { name: 'Super GM', icon: 'star', color: 'text-fuchsia-500', bg: 'bg-fuchsia-500/20', border: 'border-fuchsia-500/30', glow: 'glow-super-gm', min: 2400, next: 2500 };
+            if (elo < 2700) return { name: 'Legend', icon: 'zap', color: 'text-indigo-500', bg: 'bg-indigo-500/20', border: 'border-indigo-500/30', glow: 'glow-legend', min: 2500, next: 2700 };
+            return { name: 'Champion', icon: 'flame', color: 'text-rose-500', bg: 'bg-rose-500/20', border: 'border-rose-500/30', glow: 'glow-champion', min: 2700, next: 3500 };
+        };
+
+        app.getDistance = (lat1, lon1, lat2, lon2) => {
+            const R = 3958.8; const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        };
+
+        app.showToast = (msg, isError = true) => {
+            const existing = document.querySelectorAll('.toast-msg'); for(let t of existing) { if(t.innerText === msg) return; }
+            const toast = document.createElement('div');
+            toast.className = `toast-msg fixed top-20 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full font-bold text-sm z-[100] transition-all duration-300 shadow-2xl max-w-[90vw] text-center break-words ${isError ? 'bg-red-500 text-white' : 'bg-green-500 text-neutral-950'}`;
+            toast.textContent = msg; document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+        };
+
+        const formatLocation = (loc) => (!loc || /^-?\d+\.\d+,\s*-?\d+\.\d+/.test(loc)) ? "Nearby Target" : loc;
+
+        function renderIcons() { if (window.lucide && window.lucide.createIcons) window.lucide.createIcons(); }
+        function getEl(id) { return document.getElementById(id); }
+
+        function updateMainView() {
+            if (state.currentView === 'loading') {
+                getEl('view-loading').classList.remove('hidden'); getEl('view-onboarding').classList.add('hidden'); getEl('view-main').classList.add('hidden');
+            } else if (state.currentView === 'onboarding') {
+                getEl('view-loading').classList.add('hidden'); getEl('view-onboarding').classList.remove('hidden'); getEl('view-main').classList.add('hidden');
+            } else if (state.currentView === 'main') {
+                getEl('view-loading').classList.add('hidden'); getEl('view-onboarding').classList.add('hidden'); getEl('view-main').classList.remove('hidden');
+                renderMainContent(); updateNav();
+            }
+            renderIcons();
+        }
+
+        function updateNav() {
+            if (!state.myProfile) return;
+            const avatarEl = getEl('nav-avatar');
+            if (state.myProfile.isPremium && !avatarEl.querySelector('.pro-badge')) {
+                const badge = document.createElement('div'); badge.className = 'pro-badge absolute -bottom-1 -right-1 bg-gradient-to-r from-yellow-400 to-yellow-600 text-neutral-950 rounded-full p-0.5 shadow-lg z-10'; badge.innerHTML = '<i data-lucide="sparkles" class="w-3 h-3"></i>'; avatarEl.appendChild(badge);
+            }
+            if (state.myProfile.avatar) { avatarEl.style.backgroundImage = `url('${app.clean(state.myProfile.avatar)}')`; const badge = avatarEl.querySelector('.pro-badge'); avatarEl.innerHTML = ''; if (badge) avatarEl.appendChild(badge); }
+            else { avatarEl.style.backgroundImage = 'none'; avatarEl.textContent = state.myProfile.name.charAt(0).toUpperCase(); }
+
+            ['messages', 'leaderboard', 'arena', 'radar'].forEach(view => {
+                const btn = getEl(`nav-${view}-btn`);
+                if (btn) {
+                    if (state.mainSubView === view) { btn.classList.add('text-yellow-500'); btn.classList.remove('text-neutral-400'); }
+                    else { btn.classList.remove('text-yellow-500'); btn.classList.add('text-neutral-400'); }
+                }
+            });
+            renderIcons();
+        }
+
+        window.radarMapInstance = null;
+
+        function initRadarMap() {
+            if (window.radarMapInstance) { window.radarMapInstance.remove(); window.radarMapInstance = null; }
+            const mapEl = getEl('radar-map'); if (!mapEl) return;
+            let lat = state.myProfile?.coords?.lat; let lng = state.myProfile?.coords?.lng; let initialZoom = (lat !== undefined && lng !== undefined) ? 14 : 2;
+            window.radarMapInstance = L.map('radar-map', { zoomControl: false, attributionControl: false }).setView([lat || 20, lng || 0], initialZoom);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(window.radarMapInstance);
+            const blueDot = L.divIcon({ className: 'bg-transparent border-0', html: `<div class="relative flex items-center justify-center"><div class="absolute w-12 h-12 bg-blue-500/30 rounded-full gps-pulse"></div><div class="absolute w-8 h-8 bg-blue-500/40 rounded-full animate-ping" style="animation-duration: 3s;"></div><div class="w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-lg border border-blue-600 relative z-10"><div class="w-3 h-3 bg-blue-500 rounded-full"></div></div></div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
+            let marker; if (lat !== undefined && lng !== undefined) marker = L.marker([lat, lng], {icon: blueDot}).addTo(window.radarMapInstance);
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    const liveLat = pos.coords.latitude; const liveLng = pos.coords.longitude;
+                    window.radarMapInstance.setView([liveLat, liveLng], 14);
+                    if (marker) marker.setLatLng([liveLat, liveLng]); else marker = L.marker([liveLat, liveLng], {icon: blueDot}).addTo(window.radarMapInstance);
+                    if (state.myProfile && !state.myProfile.coords) app.patchProfile({ coords: { lat: liveLat, lng: liveLng } });
+                }, () => console.warn("Location unavailable."), { enableHighAccuracy: true });
+            }
+        }
+
+        function renderMainContent() {
+            const container = getEl('main-content');
+            if (state.mainSubView === 'radar' || state.mainSubView === 'arena') {
+                container.className = "flex-1 min-h-0 relative flex flex-col h-[calc(100dvh)]";
+                if (state.mainSubView === 'radar') { container.innerHTML = templateRadar(); setTimeout(() => initRadarMap(), 50); }
+                else if (state.mainSubView === 'arena') { container.innerHTML = templateArena(); setTimeout(() => app.init3DScene(), 50); }
+            } else {
+                container.className = "flex-1 min-h-0 relative flex flex-col pt-20 overflow-y-auto h-[calc(100dvh)]";
+                if (state.mainSubView === 'profile') container.innerHTML = templateProfile();
+                else if (state.mainSubView === 'messages') container.innerHTML = templateMessages();
+                else if (state.mainSubView === 'leaderboard') container.innerHTML = templateLeaderboard();
+            }
+            renderIcons();
+        }
+
+        // ==========================================
+        // AR ARENA MULTIPLAYER LOGIC
+        // ==========================================
+        function templateArena() {
+            return `
+                <div id="arena-root" class="absolute inset-0 z-0 overflow-hidden bg-black pointer-events-auto">
+                    <video id="ar-webcam-bg" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover z-0 hidden" style="transform: scaleX(-1);"></video>
+                    <div id="ar-canvas-container" class="absolute inset-0 z-10 w-full h-full touch-none overflow-hidden"><div id="rain-overlay" class="glass-droplets origin-center"></div></div>
+
+                    <!-- Game Over Overlay -->
+                    <div id="game-over-banner" class="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none opacity-0 transition-opacity duration-500 hidden">
+                        <div class="bg-black/80 backdrop-blur-xl border-y border-yellow-500/50 w-full py-12 flex flex-col items-center justify-center shadow-[0_0_50px_rgba(234,179,8,0.2)] transform scale-95 transition-transform duration-500" id="game-over-content">
+                            <div class="bg-yellow-500/20 p-4 rounded-full mb-4 shadow-[0_0_20px_rgba(234,179,8,0.4)]"><i id="game-over-icon" data-lucide="crown" class="h-12 w-12 text-yellow-500 animate-pulse"></i></div>
+                            <h1 id="game-over-title" class="text-5xl sm:text-7xl font-black text-white uppercase tracking-widest mb-2 drop-shadow-2xl text-center px-4">Checkmate</h1>
+                            <p class="text-xl sm:text-2xl font-bold text-yellow-500 uppercase tracking-widest mb-8 text-center px-4" id="game-over-subtitle">White Wins</p>
+                            <div class="flex gap-4 pointer-events-auto"><button onclick="app.resetGameAR()" class="bg-yellow-500 text-neutral-950 px-6 py-3 rounded-xl font-black uppercase tracking-wider hover:bg-yellow-400 transition-colors shadow-[0_0_15px_rgba(234,179,8,0.4)]"><i data-lucide="refresh-cw" class="w-5 h-5 inline-block mr-2 -mt-1"></i> Play Again</button><button onclick="app.hideGameOverBanner()" class="bg-neutral-800 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:bg-neutral-700 transition-colors border border-neutral-600"><i data-lucide="eye" class="w-5 h-5 inline-block mr-2 -mt-1"></i> View Board</button></div>
+                        </div>
+                    </div>
+
+                    <!-- 2D Clock UI Layer -->
+                    <div class="absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 flex flex-col gap-12 sm:gap-24 pointer-events-none z-30">
+                        <!-- Opponent Clock -->
+                        <div id="ui-clock-top-container" class="glass-panel px-4 py-3 sm:px-6 sm:py-4 rounded-2xl border border-neutral-700 bg-neutral-900/90 backdrop-blur-md shadow-2xl transition-all duration-300 transform pointer-events-auto min-w-[120px] opacity-90 hover:opacity-100">
+                            <div class="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-widest mb-1 text-center" id="ui-clock-top-label">Opponent</div>
+                            <div class="font-mono text-3xl sm:text-5xl font-black text-neutral-300 tracking-wider text-center" id="ui-clock-top-time">10:00</div>
+                        </div>
+
+                        <!-- Player Clock -->
+                        <div id="ui-clock-bottom-container" class="glass-panel px-4 py-3 sm:px-6 sm:py-4 rounded-2xl border border-neutral-700 bg-neutral-900/90 backdrop-blur-md shadow-2xl transition-all duration-300 transform pointer-events-auto min-w-[120px] opacity-90 hover:opacity-100">
+                            <div class="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-widest mb-1 text-center" id="ui-clock-bottom-label">You</div>
+                            <div class="font-mono text-3xl sm:text-5xl font-black text-white tracking-wider text-center" id="ui-clock-bottom-time">10:00</div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Chat Menu Overlay -->
+                    <div id="quick-chat-menu" class="hidden absolute bottom-24 right-4 sm:right-6 bg-neutral-900/90 backdrop-blur-md border border-neutral-700 rounded-xl p-2 shadow-2xl flex-col gap-1 z-50 pointer-events-auto min-w-[160px]">
+                        <button onclick="app.sendQuickChat('Good luck, have fun!')" class="text-xs font-bold text-white hover:bg-neutral-800 px-3 py-2 rounded text-left transition-colors flex items-center"><span class="mr-2">🤝</span> Good luck!</button>
+                        <button onclick="app.sendQuickChat('Great move!')" class="text-xs font-bold text-white hover:bg-neutral-800 px-3 py-2 rounded text-left transition-colors flex items-center"><span class="mr-2">🔥</span> Great move!</button>
+                        <button onclick="app.sendQuickChat('Oops!')" class="text-xs font-bold text-white hover:bg-neutral-800 px-3 py-2 rounded text-left transition-colors flex items-center"><span class="mr-2">😅</span> Oops!</button>
+                        <button onclick="app.sendQuickChat('Well played!')" class="text-xs font-bold text-white hover:bg-neutral-800 px-3 py-2 rounded text-left transition-colors flex items-center"><span class="mr-2">👏</span> Well played!</button>
+                        <button onclick="app.sendQuickChat('Thanks!')" class="text-xs font-bold text-white hover:bg-neutral-800 px-3 py-2 rounded text-left transition-colors flex items-center"><span class="mr-2">🙏</span> Thanks!</button>
+                    </div>
+
+                    <!-- Main UI Overlay -->
+                    <div id="ar-ui-layer" class="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between pt-24 pb-6 px-4 sm:px-6">
+                        <div class="flex flex-col sm:flex-row justify-between items-start gap-4 w-full pr-[140px] sm:pr-[180px]">
+                            <div class="flex flex-col gap-2 w-full sm:max-w-md">
+                                <div class="glass-panel px-4 py-2.5 rounded-xl pointer-events-auto flex items-center border border-yellow-500/30 hover:border-yellow-500 transition-colors bg-neutral-900/80 backdrop-blur-md">
+                                    <i data-lucide="map-pin" class="w-4 h-4 text-blue-400 mr-2 shrink-0"></i>
+                                    <select id="location-select" onchange="app.changeLocation(this.value)" class="w-full bg-transparent text-white text-xs sm:text-sm font-bold outline-none cursor-pointer uppercase tracking-wider truncate appearance-none">
+                                        <option value="webcam" class="bg-neutral-900 text-white font-bold">📷 Room Mapping (Webcam AR)</option>
+                                        <option value="studio" class="bg-neutral-900 text-white font-bold">Pure Photo Studio</option>
+                                        <optgroup label="--- EDITOR'S CHOICE ---" class="bg-neutral-950 text-yellow-500 font-black">
+                                            <option value="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/greenwich_park_02_1k.hdr" class="bg-neutral-900 text-white font-bold" selected>Greenwich Park 02</option>
+                                            <option value="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/venice_sunset_1k.hdr" class="bg-neutral-900 text-white font-bold">Venetian Sunset</option>
+                                            <option value="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/royal_esplanade_1k.hdr" class="bg-neutral-900 text-white font-bold">The Grand Esplanade</option>
+                                            <option value="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/pedestrian_overpass_1k.hdr" class="bg-neutral-900 text-white font-bold">Neon Overpass</option>
+                                            <option value="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/quarry_01_1k.hdr" class="bg-neutral-900 text-white font-bold">Secluded Quarry</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div class="flex gap-2 pointer-events-auto">
+                                    <div class="glass-panel px-3 py-2 rounded-lg flex-1 flex items-center bg-neutral-900/80 backdrop-blur-md border border-neutral-700 hover:border-neutral-500 transition-colors cursor-pointer"><select id="time-select" onchange="app.updateConditions()" class="w-full bg-transparent text-white text-[10px] sm:text-xs font-bold outline-none cursor-pointer uppercase tracking-wider appearance-none"><option value="day" class="bg-neutral-900">Daytime</option><option value="sunset" class="bg-neutral-900" selected>Sunset</option><option value="night" class="bg-neutral-900">Night</option></select></div>
+                                    <div class="glass-panel px-3 py-2 rounded-lg flex-1 flex items-center bg-neutral-900/80 backdrop-blur-md border border-neutral-700 hover:border-neutral-500 transition-colors cursor-pointer"><select id="weather-select" onchange="app.updateConditions()" class="w-full bg-transparent text-white text-[10px] sm:text-xs font-bold outline-none cursor-pointer uppercase tracking-wider appearance-none"><option value="clear" class="bg-neutral-900">Clear</option><option value="overcast" class="bg-neutral-900">Overcast</option><option value="rain" class="bg-neutral-900" selected>Rain</option></select></div>
+                                    <button onclick="app.randomizeEnvironment()" class="bg-yellow-500 text-neutral-950 px-3 py-2 rounded-lg font-black hover:bg-yellow-400 transition-colors shadow-sm shrink-0"><i data-lucide="dices" class="w-4 h-4"></i></button>
+                                </div>
+                            </div>
+                            <div class="glass-panel p-1 rounded-xl pointer-events-auto flex gap-1 border border-neutral-700 w-full sm:w-auto bg-neutral-900/80 backdrop-blur-md items-center shadow-lg">
+                                <button onclick="app.findMatch()" id="btn-find-match" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-3 sm:px-4 py-2 rounded-lg font-black text-xs transition-colors shadow-[0_0_15px_rgba(37,99,235,0.4)] uppercase tracking-wide truncate">Find Match</button>
+                                <button onclick="app.playBot()" id="btn-play-bot" class="flex-1 bg-green-600 hover:bg-green-500 text-white px-3 sm:px-4 py-2 rounded-lg font-black text-xs transition-colors shadow-[0_0_15px_rgba(22,163,74,0.4)] uppercase tracking-wide truncate">Play AI</button>
+
+                                <button onclick="app.openCurrentGameChat()" id="btn-arena-chat" class="${state.activeGame && !state.activeGame.isBot ? '' : 'hidden'} flex-1 bg-purple-600 hover:bg-purple-500 text-white px-3 sm:px-4 py-2 rounded-lg font-black text-xs transition-colors shadow-[0_0_15px_rgba(147,51,234,0.4)] uppercase tracking-wide truncate">Chat</button>
+                                <button onclick="app.toggleQuickChat()" id="btn-quick-chat" class="${state.activeGame && !state.activeGame.isBot ? '' : 'hidden'} flex-1 bg-pink-600 hover:bg-pink-500 text-white px-3 sm:px-4 py-2 rounded-lg font-black text-xs transition-colors shadow-[0_0_15px_rgba(219,39,119,0.4)] uppercase tracking-wide truncate">Quick</button>
+
+                                <button onclick="app.leaveMatch()" id="btn-leave-match" class="hidden flex-1 bg-red-600 hover:bg-red-500 text-white px-3 sm:px-4 py-2 rounded-lg font-black text-xs transition-colors uppercase tracking-wide truncate shadow-[0_0_15px_rgba(220,38,38,0.4)]">Resign</button>
+                            </div>
+                        </div>
+                        <div id="swipe-hint" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 glass-panel px-6 py-3 rounded-full text-sm font-bold pointer-events-none opacity-90 flex items-center transition-opacity duration-700 bg-neutral-900/80 backdrop-blur-md text-white border border-neutral-700"><i data-lucide="move-3d" class="w-4 h-4 mr-2 text-yellow-500"></i> Swipe to look around • Tap to play</div>
+                        <div class="flex flex-col justify-end items-start w-full pr-[140px] sm:pr-[180px]">
+                            <div class="pointer-events-auto glass-panel px-4 py-3 rounded-2xl flex items-center mb-4 max-w-[280px] sm:max-w-[320px] w-full border border-neutral-700 bg-neutral-900/80 backdrop-blur-md">
+                                <button onclick="app.audio.toggleAmbient()" class="mr-3 hover:text-yellow-500 transition-colors text-white focus:outline-none"><i id="icon-play-pause" data-lucide="play" class="w-5 h-5 fill-current"></i></button>
+                                <div class="overflow-hidden flex-1 relative whitespace-nowrap music-title-container"><div id="music-title" class="text-xs font-bold text-neutral-300 uppercase tracking-wider truncate">Ambient Audio Paused</div></div>
+                                <i id="music-visualizer" data-lucide="waves" class="w-4 h-4 ml-3 text-neutral-600 shrink-0 transition-colors"></i>
+                            </div>
+                            <div class="flex justify-between items-end w-full">
+                                <div class="flex gap-3 pointer-events-auto">
+                                    <button onclick="app.resetGameAR()" class="glass-panel hover:bg-white/10 text-white w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center border border-neutral-700 bg-neutral-900/80 backdrop-blur-md hover:border-white/30"><i data-lucide="refresh-cw" class="w-5 h-5 sm:w-6 sm:h-6"></i></button>
+                                    <button onclick="app.undoMoveAR()" class="glass-panel hover:bg-white/10 text-white w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center border border-neutral-700 bg-neutral-900/80 backdrop-blur-md hover:border-white/30"><i data-lucide="undo-2" class="w-5 h-5 sm:w-6 sm:h-6"></i></button>
+                                </div>
+                                <div id="ar-game-status" class="pointer-events-auto glass-panel px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-full font-black text-xs sm:text-sm uppercase tracking-wider border-l-4 border-l-yellow-500 flex items-center shadow-2xl bg-neutral-900/90 backdrop-blur-md text-white"><span class="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-yellow-500 mr-2 sm:mr-3 shadow-[0_0_10px_rgba(234,179,8,0.8)] animate-pulse"></span> White's Turn</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        app.showGameOverBanner = (timeoutWinner = null) => {
+            const banner = getEl('game-over-banner'); const content = getEl('game-over-content'); const title = getEl('game-over-title'); const subtitle = getEl('game-over-subtitle'); const icon = getEl('game-over-icon');
+            if(banner && content && subtitle && title && icon) {
+                if (timeoutWinner) {
+                    const winnerName = timeoutWinner === 'w' ? 'White' : 'Black';
+                    title.innerText = 'Time Out';
+                    subtitle.innerText = `${winnerName} Wins on Time`;
+                    icon.setAttribute('data-lucide', 'clock');
+                    icon.className = "h-12 w-12 text-red-500 animate-pulse";
+                } else if (app.ar.game.in_checkmate()) {
+                    const winner = app.ar.game.turn() === 'w' ? 'Black' : 'White';
+                    title.innerText = 'Checkmate'; subtitle.innerText = `${winner} Wins`;
+                    icon.setAttribute('data-lucide', 'crown'); icon.className = "h-12 w-12 text-yellow-500 animate-pulse";
+                } else if (app.ar.game.in_draw() || app.ar.game.in_stalemate() || app.ar.game.in_threefold_repetition()) {
+                    title.innerText = 'Draw'; subtitle.innerText = 'Game Tied';
+                    icon.setAttribute('data-lucide', 'minus-circle'); icon.className = "h-12 w-12 text-neutral-400";
+                } else { return; }
+                banner.classList.remove('hidden');
+                setTimeout(() => { banner.classList.remove('opacity-0'); banner.classList.add('opacity-100'); content.classList.remove('scale-95'); content.classList.add('scale-100'); renderIcons(); }, 50);
+            }
+        };
+
+        app.hideGameOverBanner = () => {
+            const banner = getEl('game-over-banner'); const content = getEl('game-over-content');
+            if(banner && !banner.classList.contains('hidden')) {
+                banner.classList.remove('opacity-100'); banner.classList.add('opacity-0');
+                content.classList.remove('scale-100'); content.classList.add('scale-95');
+                setTimeout(() => banner.classList.add('hidden'), 500);
+            }
+        };
+
+        app.fetchWorldLocations = async () => {
+            try {
+                const res = await fetch('https://api.polyhaven.com/assets?type=hdris'); const data = await res.json();
+                const select = getEl('location-select'); if(!select) return;
+                const categories = {};
+                for (const [key, asset] of Object.entries(data)) {
+                    const cat = asset.categories ? asset.categories[0] : 'Misc';
+                    if (!categories[cat]) categories[cat] = [];
+                    categories[cat].push({ name: asset.name, url: `https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/${key}_1k.hdr` });
+                }
+                for (const [cat, items] of Object.entries(categories)) {
+                    items.sort((a, b) => a.name.localeCompare(b.name));
+                    const group = document.createElement('optgroup'); group.label = `--- ${cat.toUpperCase()} ---`; group.className = "bg-neutral-950 text-yellow-500 font-black uppercase";
+                    items.forEach(item => { const opt = document.createElement('option'); opt.value = item.url; opt.textContent = item.name; opt.className = "bg-neutral-900 text-white font-bold capitalize"; group.appendChild(opt); });
+                    select.appendChild(group);
+                }
+            } catch(e) { console.warn("Could not load extended locations from PolyHaven"); }
+        };
+
+        app.stopAR = () => {
+            app.hideGameOverBanner();
+            if (app.ar.renderer) { app.ar.renderer.setAnimationLoop(null); app.ar.renderer.dispose(); }
+            if (app.ar.stream) { app.ar.stream.getTracks().forEach(t => t.stop()); app.ar.stream = null; }
+            const container = getEl('ar-canvas-container'); if (container) container.innerHTML = '';
+            app.audio.stopAmbient();
+            app.ar.scene = null; app.ar.camera = null; app.ar.renderer = null; app.ar.controls = null;
+            app.ar.game = null; app.ar.pieceMeshes = {}; app.ar.currentLegalMoves = {};
+            app.ar.capturedMeshes = []; app.ar.capturedCount = {w:0, b:0};
+            app.ar.boardGroup = null; app.ar.tableGroup = null; app.ar.highlightGroup = null;
+            app.ar.sharedMats = null; app.ar.sharedGeos = null; app.ar.lights = null; app.ar.rainSystem = null;
+            app.ar.clockGroup = null; app.stopClock();
+        };
+
+        app.startARCamera = async () => {
+            const videoElement = getEl('ar-webcam-bg'); if (!videoElement) return; videoElement.classList.remove('hidden');
+            try { const constraints = { video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } }; app.ar.stream = await navigator.mediaDevices.getUserMedia(constraints); videoElement.srcObject = app.ar.stream; }
+            catch (err) { app.showToast("Camera access denied."); videoElement.classList.add('hidden'); getEl('location-select').value = 'studio'; app.changeLocation('studio'); }
+        };
+
+        app.stopARCamera = () => { if (app.ar.stream) { app.ar.stream.getTracks().forEach(t => t.stop()); app.ar.stream = null; } const videoElement = getEl('ar-webcam-bg'); if(videoElement) videoElement.classList.add('hidden'); };
+
+        function initSharedARAssets() {
+            app.ar.sharedMats = {
+                whiteSquare: new THREE.MeshPhysicalMaterial({ color: 0xeeeeee, roughness: 0.15, metalness: 0.05, clearcoat: 0.5, clearcoatRoughness: 0.1 }),
+                darkSquare: new THREE.MeshPhysicalMaterial({ color: 0x222222, roughness: 0.15, metalness: 0.05, clearcoat: 0.5, clearcoatRoughness: 0.1 }),
+                woodBase: new THREE.MeshPhysicalMaterial({ color: 0x0a0503, roughness: 0.6, metalness: 0.1, clearcoat: 0.2 }),
+                boardTrim: new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.5, metalness: 0.5, clearcoat: 0.1 }),
+                whitePiece: new THREE.MeshPhysicalMaterial({ color: 0xf0f0f0, roughness: 0.2, metalness: 0.1, clearcoat: 0.4 }),
+                blackPiece: new THREE.MeshPhysicalMaterial({ color: 0x0f0f0f, roughness: 0.2, metalness: 0.2, clearcoat: 0.4 }),
+                tableTop: new THREE.MeshPhysicalMaterial({ color: 0x080808, roughness: 0.2, metalness: 0.4, clearcoat: 0.8 }),
+                decorMug: new THREE.MeshPhysicalMaterial({ color: 0xdddddd, roughness: 0.1, clearcoat: 0.8 }),
+                decorCoffee: new THREE.MeshBasicMaterial({ color: 0x1a0b00 }),
+                decorNotebook: new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.8 }),
+                decorPages: new THREE.MeshPhysicalMaterial({ color: 0xffffee, roughness: 0.9 }),
+                decorPen: new THREE.MeshPhysicalMaterial({ color: 0x444444, roughness: 0.2, metalness: 0.8 })
+            };
+            Object.values(app.ar.sharedMats).forEach(mat => {
+                mat.userData.origRoughness = mat.roughness; mat.userData.origEnv = mat.envMapIntensity || 1.0;
+                if(mat.clearcoat !== undefined) mat.userData.origClearcoat = mat.clearcoat;
+                if(mat.color) mat.userData.origColor = mat.color.clone();
+            });
+            const segs = 32;
+            app.ar.sharedGeos = {
+                base: new THREE.CylinderGeometry(0.18, 0.22, 0.1, segs), pawnBody: new THREE.CylinderGeometry(0.08, 0.15, 0.3, segs), pawnHead: new THREE.SphereGeometry(0.12, segs, segs/2),
+                rookBody: new THREE.CylinderGeometry(0.15, 0.17, 0.4, segs), rookHeadBase: new THREE.CylinderGeometry(0.18, 0.15, 0.05, segs), rookBattlement: new THREE.BoxGeometry(0.06, 0.05, 0.06),
+                knightBody: new THREE.CylinderGeometry(0.12, 0.16, 0.3, segs), knightHead: new THREE.SphereGeometry(0.12, segs, segs/2), knightSnout: new THREE.CylinderGeometry(0.06, 0.09, 0.2, segs),
+                bishopBody: new THREE.CylinderGeometry(0.08, 0.16, 0.4, segs), bishopHead: new THREE.ConeGeometry(0.12, 0.3, segs), bishopCrown: new THREE.SphereGeometry(0.04, segs, segs/2),
+                queenBody: new THREE.CylinderGeometry(0.08, 0.16, 0.5, segs), queenHead: new THREE.CylinderGeometry(0.18, 0.05, 0.2, segs), queenCrown: new THREE.SphereGeometry(0.06, segs, segs/2),
+                kingBody: new THREE.CylinderGeometry(0.09, 0.17, 0.6, segs), kingHead: new THREE.CylinderGeometry(0.15, 0.05, 0.15, segs), kingCrossV: new THREE.BoxGeometry(0.03, 0.12, 0.03), kingCrossH: new THREE.BoxGeometry(0.08, 0.03, 0.03)
+            };
+        }
+
+        function setupRainAR() {
+            const dropCount = 1500; const rainGeo = new THREE.BufferGeometry(); const positions = new Float32Array(dropCount * 6); const velocities = [];
+            for (let i = 0; i < dropCount; i++) {
+                const x = (Math.random() - 0.5) * 12; const y = Math.random() * 10; const z = (Math.random() - 0.5) * 12;
+                positions[i*6] = x; positions[i*6+1] = y; positions[i*6+2] = z; positions[i*6+3] = x - 0.05; positions[i*6+4] = y - 0.4; positions[i*6+5] = z;
+                velocities.push(0.4 + Math.random() * 0.3);
+            }
+            rainGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const rainMat = new THREE.LineBasicMaterial({ color: 0x99bbff, transparent: true, opacity: 0.5 });
+            app.ar.rainSystem = new THREE.LineSegments(rainGeo, rainMat); app.ar.rainSystem.userData.velocities = velocities;
+            app.ar.scene.add(app.ar.rainSystem);
+        }
+
+        app.updateConditions = () => {
+            const time = getEl('time-select')?.value || 'day'; const weather = getEl('weather-select')?.value || 'clear';
+            const lights = app.ar.lights; const drops = getEl('rain-overlay');
+            if (lights) {
+                if (time === 'day') {
+                    lights.key.color.setHex(0xfff5e6); lights.key.intensity = 3.5; lights.key.position.set(4, 8, 3); lights.fill.color.setHex(0xaaccff); lights.fill.intensity = 1.5; lights.ambient.intensity = 0.3; if(app.ar.renderer) app.ar.renderer.toneMappingExposure = 1.2;
+                } else if (time === 'sunset') {
+                    lights.key.color.setHex(0xffaa55); lights.key.intensity = 2.5; lights.key.position.set(6, 2, -4); lights.fill.color.setHex(0x553355); lights.fill.intensity = 1.0; lights.ambient.intensity = 0.15; if(app.ar.renderer) app.ar.renderer.toneMappingExposure = 0.8;
+                } else if (time === 'night') {
+                    lights.key.color.setHex(0x335588); lights.key.intensity = 0.3; lights.key.position.set(2, 5, 2); lights.fill.color.setHex(0x0a0a1a); lights.fill.intensity = 0.1; lights.ambient.intensity = 0.05; if(app.ar.renderer) app.ar.renderer.toneMappingExposure = 0.35;
+                }
+                const isWet = (weather === 'rain'); const isOvercast = (weather === 'overcast' || weather === 'rain');
+                lights.key.castShadow = !isOvercast;
+                if (isOvercast) { lights.ambient.intensity += 0.1; if(app.ar.renderer) app.ar.renderer.toneMappingExposure *= 0.8; }
+
+                if (app.ar.sharedMats) {
+                    if (isWet) {
+                        Object.values(app.ar.sharedMats).forEach(mat => {
+                            mat.roughness = 0.05; mat.envMapIntensity = mat.userData.origEnv * 3.0;
+                            if(mat.clearcoat !== undefined) mat.clearcoat = 1.0;
+                            if(mat.color) mat.color.copy(mat.userData.origColor).lerp(new THREE.Color(0x000000), 0.25);
+                        });
+                    } else {
+                        Object.values(app.ar.sharedMats).forEach(mat => {
+                            mat.roughness = mat.userData.origRoughness; mat.envMapIntensity = mat.userData.origEnv;
+                            if(mat.clearcoat !== undefined) mat.clearcoat = mat.userData.origClearcoat;
+                            if(mat.color) mat.color.copy(mat.userData.origColor);
+                        });
+                    }
+                }
+
+                const rootEl = getEl('arena-root');
+                if (weather === 'rain') {
+                    if (!app.ar.rainSystem) setupRainAR(); app.ar.rainSystem.visible = true; if(rootEl) rootEl.classList.add('is-raining');
+                    if (drops) { drops.style.transition = 'opacity 5s ease-in, transform 60s linear'; drops.style.opacity = '1'; drops.style.transform = 'scale(1.5)'; }
+                } else {
+                    if (app.ar.rainSystem) app.ar.rainSystem.visible = false; if(rootEl) rootEl.classList.remove('is-raining');
+                    if (drops) { drops.style.transition = 'opacity 1s ease-out'; drops.style.opacity = '0'; setTimeout(() => drops.style.transform = 'scale(1)', 1000); }
+                }
+            }
+        };
+
+        app.randomizeEnvironment = () => {
+            const times = ['day', 'sunset', 'night']; const weathers = ['clear', 'overcast', 'rain'];
+            const t = times[Math.floor(Math.random() * times.length)]; const w = weathers[Math.floor(Math.random() * weathers.length)];
+            const timeSel = getEl('time-select'); const weaSel = getEl('weather-select');
+            if(timeSel) timeSel.value = t; if(weaSel) weaSel.value = w;
+            app.updateConditions(); app.showToast(`Environment changed to ${w} and ${t}.`, false);
+        };
+
+        app.init3DScene = () => {
+            const container = getEl('ar-canvas-container'); if (!container) return;
+            initSharedARAssets();
+            app.ar.game = new window.Chess(); app.ar.pieceMeshes = {}; app.ar.capturedMeshes = []; app.ar.currentLegalMoves = {}; app.ar.selectedSquare = null; app.ar.isAnimating = false;
+            app.ar.scene = new THREE.Scene(); app.ar.scene.background = new THREE.Color(0x0a0a0a);
+            app.ar.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100); app.ar.camera.position.set(0, 0.6, 1.2);
+            app.ar.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "default" });
+            app.ar.renderer.setClearColor(0x000000, 0);
+            app.ar.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+            app.ar.renderer.setSize(window.innerWidth, window.innerHeight);
+            app.ar.renderer.shadowMap.enabled = true;
+            app.ar.renderer.shadowMap.type = THREE.PCFShadowMap;
+            app.ar.renderer.toneMapping = THREE.ACESFilmicToneMapping; app.ar.renderer.toneMappingExposure = 1.2;
+            container.insertBefore(app.ar.renderer.domElement, container.firstChild);
+            app.ar.pmremGenerator = new THREE.PMREMGenerator(app.ar.renderer); app.ar.pmremGenerator.compileEquirectangularShader();
+            app.ar.studioEnvironment = app.ar.pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture; app.ar.scene.environment = app.ar.studioEnvironment;
+
+            app.ar.lights = {};
+            app.ar.lights.ambient = new THREE.AmbientLight(0xffffff, 0.3); app.ar.scene.add(app.ar.lights.ambient);
+            app.ar.lights.key = new THREE.DirectionalLight(0xfff5e6, 3.5); app.ar.lights.key.position.set(4, 8, 3); app.ar.lights.key.castShadow = true;
+            app.ar.lights.key.shadow.mapSize.width = 512; app.ar.lights.key.shadow.mapSize.height = 512; app.ar.lights.key.shadow.bias = -0.0005;
+            app.ar.lights.key.shadow.camera.near = 0.5; app.ar.lights.key.shadow.camera.far = 15; app.ar.lights.key.shadow.camera.left = -1.5; app.ar.lights.key.shadow.camera.right = 1.5; app.ar.lights.key.shadow.camera.top = 1.5; app.ar.lights.key.shadow.camera.bottom = -1.5;
+            app.ar.scene.add(app.ar.lights.key);
+            app.ar.lights.fill = new THREE.DirectionalLight(0xaaccff, 1.5); app.ar.lights.fill.position.set(-4, 4, -3); app.ar.scene.add(app.ar.lights.fill);
+            app.ar.lights.rim = new THREE.PointLight(0xffeedd, 5.0, 10); app.ar.lights.rim.position.set(0, 2, -3); app.ar.scene.add(app.ar.lights.rim);
+
+            app.ar.controls = new OrbitControls(app.ar.camera, app.ar.renderer.domElement);
+            app.ar.controls.enableDamping = true; app.ar.controls.dampingFactor = 0.04; app.ar.controls.maxPolarAngle = Math.PI / 2 - 0.01; app.ar.controls.minDistance = 0.3; app.ar.controls.maxDistance = 2.5; app.ar.controls.target.set(0, 0.05, 0);
+
+            setupPhotorealisticTableAR();
+            setupBoardAR();
+            setupClockAR(); // Initialize 3D clock mesh
+
+            app.resetClock();
+
+            app.fetchWorldLocations();
+            app.changeLocation(getEl('location-select').value || 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/greenwich_park_02_1k.hdr');
+            app.updateConditions();
+            container.addEventListener('pointerdown', onPointerDownAR); window.addEventListener('resize', onWindowResizeAR);
+            app.ar.renderer.setAnimationLoop(animateAR);
+        };
+
+        app.changeLocation = (url) => {
+            app.ar.currentSceneUrl = url; if (app.audio.isAmbientPlaying) app.audio.updateAmbientForScene(url);
+            if (url === 'webcam') {
+                app.startARCamera(); app.ar.scene.background = null; app.ar.scene.environment = app.ar.studioEnvironment;
+                if (app.ar.tableGroup) app.ar.tableGroup.visible = false; app.updateGameStatusAR("Webcam AR Active"); return;
+            }
+            app.stopARCamera(); if (app.ar.tableGroup) app.ar.tableGroup.visible = true;
+            if (!url || url === 'studio') {
+                app.ar.scene.background = new THREE.Color(0x0a0a0a); app.ar.scene.environment = app.ar.studioEnvironment; app.updateGameStatusAR("Studio Loaded"); return;
+            }
+            const isHDR = url.endsWith('.hdr'); const loader = isHDR ? app.ar.rgbeLoader : app.ar.textureLoader;
+            loader.load(url, (texture) => { texture.mapping = THREE.EquirectangularReflectionMapping; if (!isHDR) texture.colorSpace = THREE.SRGBColorSpace; app.ar.scene.background = texture; app.ar.scene.environment = texture; app.updateGameStatusAR("Location Secured"); }, undefined, (err) => { console.warn("Failed to load panorama. Using fallback.", err); app.changeLocation('studio'); if(getEl('location-select')) getEl('location-select').value = 'studio'; });
+        };
+
+        function setupPhotorealisticTableAR() {
+            app.ar.tableGroup = new THREE.Group(); app.ar.tableGroup.position.y = -0.03;
+            const tableTopGeo = new THREE.CylinderGeometry(1.5, 1.5, 0.04, 32); const tableTop = new THREE.Mesh(tableTopGeo, app.ar.sharedMats.tableTop); tableTop.position.y = -0.02; tableTop.receiveShadow = true;
+            const pedestalMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.4, metalness: 0.6 });
+            const pedestalGeo = new THREE.CylinderGeometry(0.15, 0.3, 2.0, 16); const pedestal = new THREE.Mesh(pedestalGeo, pedestalMat); pedestal.position.y = -1.04; pedestal.castShadow = true;
+            const baseGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.05, 16); const base = new THREE.Mesh(baseGeo, pedestalMat); base.position.y = -2.04; base.receiveShadow = true;
+
+            // Decor items
+            const mugGroup = new THREE.Group(); const mugBody = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.12, 32), app.ar.sharedMats.decorMug); const coffee = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.11, 32), app.ar.sharedMats.decorCoffee); coffee.position.y = 0.01; const handle = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.012, 16, 32), app.ar.sharedMats.decorMug); handle.position.x = 0.06; handle.rotation.z = Math.PI / 2; mugGroup.add(mugBody, coffee, handle); mugGroup.position.set(0.7, 0.06, 0.4); mugGroup.rotation.y = -Math.PI / 4; mugGroup.children.forEach(c => { c.castShadow = true; c.receiveShadow = true; }); app.ar.tableGroup.add(mugGroup);
+
+            const noteGroup = new THREE.Group(); const notebookGeo = new THREE.BoxGeometry(0.25, 0.02, 0.35); const mats = app.ar.sharedMats; const notebook = new THREE.Mesh(notebookGeo, [mats.decorNotebook, mats.decorNotebook, mats.decorPages, mats.decorNotebook, mats.decorPages, mats.decorPages]); notebook.position.y = 0.01; notebook.castShadow = true; notebook.receiveShadow = true; const penGeo = new THREE.CylinderGeometry(0.006, 0.006, 0.16, 16); const pen = new THREE.Mesh(penGeo, mats.decorPen); pen.rotation.z = Math.PI / 2; pen.position.set(0.0, 0.025, 0.05); pen.rotation.y = Math.PI / 6; pen.castShadow = true; pen.receiveShadow = true; noteGroup.add(notebook, pen); noteGroup.position.set(-0.65, 0, -0.4); noteGroup.rotation.y = Math.PI / 8; app.ar.tableGroup.add(noteGroup);
+
+            // Premium PRO Laptop
+            const laptopGroup = new THREE.Group();
+            const silverMat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2, clearcoat: 0.1 });
+            const blackMat = new THREE.MeshPhysicalMaterial({ color: 0x111111, metalness: 0.5, roughness: 0.8 });
+
+            // Laptop Base
+            const laptopBase = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.015, 0.25), silverMat);
+            laptopBase.position.y = 0.0075;
+            laptopBase.castShadow = true; laptopBase.receiveShadow = true;
+            laptopGroup.add(laptopBase);
+
+            // Keyboard area
+            const kb = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.016, 0.12), blackMat);
+            kb.position.set(0, 0.008, -0.04);
+            laptopGroup.add(kb);
+
+            // Screen Lid
+            const lidGroup = new THREE.Group();
+            lidGroup.position.set(0, 0.015, -0.125);
+            lidGroup.rotation.x = -Math.PI / 8; // Open angle
+
+            const lid = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.25, 0.01), silverMat);
+            lid.position.set(0, 0.125, 0.005);
+            lid.castShadow = true; lid.receiveShadow = true;
+            lidGroup.add(lid);
+
+            // Canvas for Premium Features Screen
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 384; // 4:3 aspect
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, 512, 384);
+
+            const gradient = ctx.createLinearGradient(0, 0, 512, 0);
+            gradient.addColorStop(0, '#facc15');
+            gradient.addColorStop(1, '#ca8a04');
+            ctx.fillStyle = gradient;
+            ctx.font = '900 36px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('CHRONO CHESS PRO', 256, 60);
+
+            ctx.fillStyle = '#444';
+            ctx.fillRect(50, 80, 412, 2);
+
+            ctx.textAlign = 'left';
+            ctx.font = 'bold 24px sans-serif';
+            const features = [
+                "✔️ Unlimited Matches",
+                "✔️ City-Wide Radar",
+                "✔️ Host Tournaments",
+                "✔️ Incognito Mode",
+                "✔️ Premium Badges"
+            ];
+            features.forEach((feat, i) => {
+                ctx.fillStyle = '#22c55e'; // Green check
+                ctx.fillText(feat.split(' ')[0], 70, 140 + i * 45);
+                ctx.fillStyle = '#ffffff'; // White text
+                ctx.fillText(feat.substring(2), 110, 140 + i * 45);
+            });
+
+            ctx.fillStyle = '#facc15';
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 20px sans-serif';
+            ctx.fillText('Upgrade Today to Unlock!', 256, 350);
+
+            const screenTexture = new THREE.CanvasTexture(canvas);
+            screenTexture.colorSpace = THREE.SRGBColorSpace;
+            const screenMat = new THREE.MeshBasicMaterial({ map: screenTexture });
+            const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.33, 0.23), screenMat);
+            screen.position.set(0, 0.125, 0.011);
+            lidGroup.add(screen);
+
+            laptopGroup.add(lidGroup);
+            laptopGroup.position.set(0.65, 0.02, -0.3);
+            laptopGroup.rotation.y = -Math.PI / 4;
+            app.ar.tableGroup.add(laptopGroup);
+
+            app.ar.tableGroup.add(tableTop, pedestal, base); app.ar.scene.add(app.ar.tableGroup);
+        }
+
+        function setupBoardAR() {
+            app.ar.boardGroup = new THREE.Group(); app.ar.scene.add(app.ar.boardGroup);
+            app.ar.highlightGroup = new THREE.Group(); app.ar.boardGroup.add(app.ar.highlightGroup);
+            const squareSize = app.ar.squareSize * 0.99; const squareGeo = new THREE.BoxGeometry(squareSize, 0.015, squareSize);
+            for (let file = 0; file < 8; file++) {
+                for (let rank = 0; rank < 8; rank++) {
+                    const isWhite = (file + rank) % 2 !== 0; const square = new THREE.Mesh(squareGeo, isWhite ? app.ar.sharedMats.whiteSquare : app.ar.sharedMats.darkSquare);
+                    square.receiveShadow = true; square.castShadow = true;
+                    const pos = getPositionFromSquareAR(String.fromCharCode(97 + file) + (rank + 1));
+                    square.position.set(pos.x, 0, pos.z); app.ar.boardGroup.add(square);
+                }
+            }
+
+            // Expanded base to act as a tray for captured pieces
+            const baseGeo = new THREE.BoxGeometry(app.ar.squareSize * 11, 0.03, app.ar.squareSize * 8.6);
+            const base = new THREE.Mesh(baseGeo, app.ar.sharedMats.woodBase); base.position.y = -0.022; base.castShadow = true; base.receiveShadow = true; app.ar.boardGroup.add(base);
+            const trimGeo = new THREE.BoxGeometry(app.ar.squareSize * 11.1, 0.01, app.ar.squareSize * 8.7);
+            const trim = new THREE.Mesh(trimGeo, app.ar.sharedMats.boardTrim); trim.position.y = -0.01; trim.castShadow = true; trim.receiveShadow = true; app.ar.boardGroup.add(trim);
+
+            const shadowPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.2), new THREE.ShadowMaterial({ opacity: 0.8, transparent: true })); shadowPlane.rotation.x = -Math.PI / 2; shadowPlane.position.y = -0.038; shadowPlane.receiveShadow = true; app.ar.boardGroup.add(shadowPlane);
+            syncBoardToGameAR();
+        }
+
+        function setupClockAR() {
+            if (app.ar.clockGroup) {
+                app.ar.boardGroup.remove(app.ar.clockGroup);
+            }
+            app.ar.clockGroup = new THREE.Group();
+            app.ar.clockGroup.position.set(-0.65, 0.05, 0); // Positioned further left to account for wider board
+
+            // Base housing
+            const baseMat = new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.8, clearcoat: 0.2 });
+            const baseGeo = new THREE.BoxGeometry(0.16, 0.08, 0.24); // Longer on Z to face both players
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            base.castShadow = true; base.receiveShadow = true;
+            app.ar.clockGroup.add(base);
+
+            // Physical Buttons
+            const btnGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.04);
+            const btnMatW = new THREE.MeshPhysicalMaterial({ color: 0xeeeeee, roughness: 0.2 });
+            const btnMatB = new THREE.MeshPhysicalMaterial({ color: 0x222222, roughness: 0.2 });
+
+            app.clock.buttonW = new THREE.Mesh(btnGeo, btnMatW);
+            app.clock.buttonW.position.set(0, 0.05, 0.06); // White's button towards +Z
+            app.clock.buttonB = new THREE.Mesh(btnGeo, btnMatB);
+            app.clock.buttonB.position.set(0, 0.05, -0.06); // Black's button towards -Z
+            app.ar.clockGroup.add(app.clock.buttonW, app.clock.buttonB);
+
+            // Canvas Textures for Digital Display
+            app.clock.canvasW = document.createElement('canvas');
+            app.clock.canvasW.width = 128; app.clock.canvasW.height = 64;
+            app.clock.ctxW = app.clock.canvasW.getContext('2d');
+            app.clock.textureW = new THREE.CanvasTexture(app.clock.canvasW);
+            const dispMatW = new THREE.MeshBasicMaterial({ map: app.clock.textureW });
+
+            app.clock.canvasB = document.createElement('canvas');
+            app.clock.canvasB.width = 128; app.clock.canvasB.height = 64;
+            app.clock.ctxB = app.clock.canvasB.getContext('2d');
+            app.clock.textureB = new THREE.CanvasTexture(app.clock.canvasB);
+            const dispMatB = new THREE.MeshBasicMaterial({ map: app.clock.textureB });
+
+            const dispGeo = new THREE.PlaneGeometry(0.12, 0.06);
+
+            // White Face (Faces +Z)
+            const dispW = new THREE.Mesh(dispGeo, dispMatW);
+            dispW.position.set(0, 0, 0.121);
+
+            // Black Face (Faces -Z)
+            const dispB = new THREE.Mesh(dispGeo, dispMatB);
+            dispB.position.set(0, 0, -0.121);
+            dispB.rotation.y = Math.PI;
+
+            app.ar.clockGroup.add(dispW, dispB);
+            app.ar.boardGroup.add(app.ar.clockGroup);
+
+            app.updateClockUI();
+        }
+
+        function createPieceMeshAR(type, color) {
+            const isWhite = color === 'w'; const pieceMat = isWhite ? app.ar.sharedMats.whitePiece : app.ar.sharedMats.blackPiece; const geos = app.ar.sharedGeos;
+            const scale = app.ar.squareSize / 0.5; const group = new THREE.Group();
+            const base = new THREE.Mesh(geos.base, pieceMat); base.position.y = 0.05; base.castShadow = true; base.receiveShadow = true; group.add(base);
+            let body, head;
+            switch(type) {
+                case 'p': body = new THREE.Mesh(geos.pawnBody, pieceMat); body.position.y = 0.25; head = new THREE.Mesh(geos.pawnHead, pieceMat); head.position.y = 0.48; group.add(body, head); break;
+                case 'r': body = new THREE.Mesh(geos.rookBody, pieceMat); body.position.y = 0.3; const headBase = new THREE.Mesh(geos.rookHeadBase, pieceMat); headBase.position.y = 0.525; group.add(body, headBase); for (let i = 0; i < 4; i++) { const battlement = new THREE.Mesh(geos.rookBattlement, pieceMat); const angle = (i * Math.PI) / 2; battlement.position.set(Math.cos(angle) * 0.15, 0.575, Math.sin(angle) * 0.15); battlement.castShadow = true; battlement.receiveShadow = true; group.add(battlement); } break;
+                case 'n': body = new THREE.Mesh(geos.knightBody, pieceMat); body.position.y = 0.25; head = new THREE.Mesh(geos.knightHead, pieceMat); head.position.set(0, 0.45, 0); const snout = new THREE.Mesh(geos.knightSnout, pieceMat); snout.rotation.x = Math.PI / 2; snout.position.set(0, 0.42, 0.1); group.rotation.y = isWhite ? Math.PI : 0; group.add(body, head, snout); break;
+                case 'b': body = new THREE.Mesh(geos.bishopBody, pieceMat); body.position.y = 0.3; head = new THREE.Mesh(geos.bishopHead, pieceMat); head.position.y = 0.6; const crown = new THREE.Mesh(geos.bishopCrown, pieceMat); crown.position.y = 0.76; group.add(body, head, crown); break;
+                case 'q': body = new THREE.Mesh(geos.queenBody, pieceMat); body.position.y = 0.35; head = new THREE.Mesh(geos.queenHead, pieceMat); head.position.y = 0.65; const qCrown = new THREE.Mesh(geos.queenCrown, pieceMat); qCrown.position.y = 0.78; group.add(body, head, qCrown); break;
+                case 'k': body = new THREE.Mesh(geos.kingBody, pieceMat); body.position.y = 0.4; head = new THREE.Mesh(geos.kingHead, pieceMat); head.position.y = 0.75; const crossV = new THREE.Mesh(geos.kingCrossV, pieceMat); crossV.position.y = 0.88; const crossH = new THREE.Mesh(geos.kingCrossH, pieceMat); crossH.position.y = 0.88; crossV.castShadow = true; crossH.castShadow = true; group.add(body, head, crossV, crossH); break;
+            }
+            group.children.forEach(c => { c.castShadow = true; c.receiveShadow = true; }); group.userData = { isPiece: true, type, color }; group.scale.set(scale, scale, scale); return group;
+        }
+
+        function getFileRankFromSquareAR(sq) { return { file: sq.charCodeAt(0) - 97, rank: parseInt(sq.charAt(1)) - 1 }; }
+        function getPositionFromSquareAR(sq) { const { file, rank } = getFileRankFromSquareAR(sq); return { x: (file - 3.5) * app.ar.squareSize, y: 0.01, z: (3.5 - rank) * app.ar.squareSize }; }
+
+        function getCapturedPosition(capturerColor, index) {
+            const col = Math.floor(index / 8);
+            const row = index % 8;
+            const sideX = capturerColor === 'w' ? 4.6 + (col * 0.5) : -4.6 - (col * 0.5);
+            const sideZ = capturerColor === 'w' ? 3.5 - row : -3.5 + row;
+            return { x: sideX * app.ar.squareSize, y: 0.01, z: sideZ * app.ar.squareSize };
+        }
+
+        function syncBoardToGameAR() {
+            // Clean up main board
+            for (let sq in app.ar.pieceMeshes) app.ar.boardGroup.remove(app.ar.pieceMeshes[sq]);
+            app.ar.pieceMeshes = {};
+
+            // Clean up old captured pieces
+            if (app.ar.capturedMeshes) {
+                app.ar.capturedMeshes.forEach(m => app.ar.boardGroup.remove(m));
+            }
+            app.ar.capturedMeshes = [];
+
+            // Main piece spawning
+            const board = app.ar.game.board();
+            for (let rank = 0; rank < 8; rank++) {
+                for (let file = 0; file < 8; file++) {
+                    const piece = board[rank][file];
+                    if (piece) {
+                        const sq = String.fromCharCode(97 + file) + (8 - rank); const mesh = createPieceMeshAR(piece.type, piece.color); const pos = getPositionFromSquareAR(sq);
+                        mesh.position.set(pos.x, pos.y, pos.z); mesh.userData.square = sq; app.ar.boardGroup.add(mesh); app.ar.pieceMeshes[sq] = mesh;
+                    }
+                }
+            }
+
+            // Spawn captured pieces on trays
+            const captured = { w: [], b: [] };
+            const history = app.ar.game.history({ verbose: true });
+            for (const m of history) {
+                if (m.captured) captured[m.color].push(m.captured);
+            }
+
+            ['w', 'b'].forEach(color => {
+                captured[color].forEach((pieceType, index) => {
+                    const pieceColor = color === 'w' ? 'b' : 'w';
+                    const mesh = createPieceMeshAR(pieceType, pieceColor);
+                    const pos = getCapturedPosition(color, index);
+                    mesh.position.set(pos.x, pos.y, pos.z);
+                    app.ar.boardGroup.add(mesh);
+                    app.ar.capturedMeshes.push(mesh);
+                });
+            });
+        }
+
+        app.updateGameStatusAR = (text) => {
+            const badge = getEl('ar-game-status');
+            if(badge) {
+                if(text) badge.innerHTML = text;
+                else {
+                    const color = app.ar.game.turn() === 'w' ? "White" : "Black"; let stateText = `${color}'s Turn`;
+                    if(app.ar.game.in_check()) stateText += ' (Check)'; if(app.ar.game.in_checkmate()) stateText = `Checkmate! ${color} Lost`;
+                    badge.innerHTML = `<span class="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full ${app.ar.game.turn() === 'w' ? 'bg-white' : 'bg-neutral-900'} mr-2 sm:mr-3 shadow-[0_0_10px_rgba(255,255,255,0.8)] animate-pulse border border-neutral-500"></span> ${stateText}`;
+                }
+            }
+        };
+
+        function onPointerDownAR(event) {
+            app.audio.init(); if (app.ar.isAnimating || app.bot.isThinking || (app.ar.game && app.ar.game.game_over())) return;
+
+            // Close quick chat menu if click anywhere else
+            if (state.quickChatOpen && !event.target.closest('#quick-chat-menu') && !event.target.closest('#btn-quick-chat')) {
+                app.toggleQuickChat();
+            }
+
+            if (state.activeGame && app.ar.game.turn() !== state.activeGame.myColor) { app.showToast(state.activeGame.isBot ? "AI is thinking..." : "Waiting for opponent's move..."); return; }
+
+            const rect = app.ar.renderer.domElement.getBoundingClientRect(); const x = ((event.clientX - rect.left) / rect.width) * 2 - 1; const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            app.ar.raycaster.setFromCamera(new THREE.Vector2(x, y), app.ar.camera); const intersects = app.ar.raycaster.intersectObjects(app.ar.boardGroup.children, true);
+            const hint = getEl('swipe-hint'); if(hint) hint.style.opacity = '0';
+
+            if (intersects.length > 0) {
+                let object = intersects[0].object; while (object && !object.userData.square && !object.userData.isHighlight && object.parent) object = object.parent;
+                let clickedSquare = object.userData.square || (object.userData.isHighlight ? object.userData.move.to : null);
+
+                if (clickedSquare && app.ar.currentLegalMoves[clickedSquare]) { app.executeMoveAR(app.ar.currentLegalMoves[clickedSquare]); }
+                else if (object.userData.square) { const piece = app.ar.game.get(object.userData.square); if (piece && piece.color === app.ar.game.turn()) showLegalMovesAR(object.userData.square); else clearHighlightsAR(); }
+                else clearHighlightsAR();
+            } else clearHighlightsAR();
+        }
+
+        app.animatePiece = (mesh, startPos, endPos, duration, arcHeight) => {
+            return new Promise(resolve => {
+                const startTime = performance.now();
+                function update() {
+                    const elapsed = performance.now() - startTime; let t = elapsed / duration; if (t > 1) t = 1; const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+                    mesh.position.lerpVectors(startPos, endPos, ease); mesh.position.y += Math.sin(t * Math.PI) * arcHeight;
+                    if (t < 1) requestAnimationFrame(update); else { mesh.position.copy(endPos); resolve(); }
+                }
+                update();
+            });
+        };
+
+        app.executeMoveAR = async (move, isBotMove = false) => {
+            app.ar.isAnimating = true; clearHighlightsAR();
+            const pieceMesh = app.ar.pieceMeshes[move.from]; const targetPos = getPositionFromSquareAR(move.to); const animations = [];
+
+            if (pieceMesh) { const startPos = pieceMesh.position.clone(); const pieceType = app.ar.game.get(move.from).type; const arcHeight = pieceType === 'n' ? 0.08 : 0.02; animations.push(app.animatePiece(pieceMesh, startPos, targetPos, 400, arcHeight)); }
+            if (move.captured) {
+                let capturedSquare = move.to; if (move.flags.includes('e')) { const rank = parseInt(move.to.charAt(1)); const file = move.to.charAt(0); const capturedRank = app.ar.game.turn() === 'w' ? rank - 1 : rank + 1; capturedSquare = file + capturedRank; }
+                const capturedMesh = app.ar.pieceMeshes[capturedSquare];
+
+                if (capturedMesh) {
+                    const capturerColor = move.color;
+                    const history = app.ar.game.history({ verbose: true });
+                    const currentCaptureCount = history.filter(m => m.color === capturerColor && m.captured).length;
+
+                    const trayPosObj = getCapturedPosition(capturerColor, currentCaptureCount);
+                    const trayPos = new THREE.Vector3(trayPosObj.x, trayPosObj.y, trayPosObj.z);
+                    animations.push(app.animatePiece(capturedMesh, capturedMesh.position.clone(), trayPos, 400, 0.08));
+                }
+            }
+            if (move.flags.includes('k') || move.flags.includes('q')) {
+                const rank = move.from.charAt(1); const isKingside = move.flags.includes('k'); const rookFromSq = isKingside ? `h${rank}` : `a${rank}`; const rookToSq = isKingside ? `f${rank}` : `d${rank}`;
+                const rookMesh = app.ar.pieceMeshes[rookFromSq]; if (rookMesh) animations.push(app.animatePiece(rookMesh, rookMesh.position.clone(), getPositionFromSquareAR(rookToSq), 400, 0.02));
+            }
+
+            if (animations.length > 0) await Promise.all(animations);
+            app.ar.game.move(move.san); app.audio.playMoveSound(move.captured, app.ar.game.in_check()); syncBoardToGameAR();
+
+            // Start clock if first move is made
+            if (!app.clock.isRunning && !app.ar.game.game_over()) app.startClock();
+
+            app.ar.isAnimating = false; app.updateGameStatusAR(); app.updateClockUI();
+
+            // BACKEND SYNC (Send Move as a ChatMessage FEN)
+            if (state.activeGame && !state.activeGame.isBot && state.user) {
+                try {
+                    await fetch(`${API_BASE}/messages/${state.activeGame.id}/chat`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ senderId: state.user.uid, text: `FEN:${app.ar.game.fen()}` })
+                    });
+                } catch(e) { console.warn("Failed to sync move to API"); }
+            }
+
+            if (app.ar.game.game_over()) {
+                app.stopClock();
+                app.showGameOverBanner();
+            } else if (state.activeGame && state.activeGame.isBot && !isBotMove && app.ar.game.turn() !== state.activeGame.myColor) {
+                app.bot.makeMove();
+            }
+        };
+
+        app.undoMoveAR = () => {
+            if (state.activeGame && !state.activeGame.isBot) return app.showToast("Cannot undo in an online match.");
+            if (app.ar.isAnimating || app.bot.isThinking) return;
+            app.hideGameOverBanner();
+            if (app.ar.game.history().length > 0) {
+                app.ar.game.undo();
+                if (state.activeGame && state.activeGame.isBot && app.ar.game.turn() !== state.activeGame.myColor) { app.ar.game.undo(); }
+            }
+            if(app.ar.game.history().length === 0) app.stopClock();
+            clearHighlightsAR(); syncBoardToGameAR(); app.updateGameStatusAR(); app.updateClockUI();
+        };
+
+        app.resetGameAR = (skipToast = false) => {
+            if (state.activeGame && !state.activeGame.isBot && !skipToast) return app.showToast("Cannot reset during an online match.");
+            app.hideGameOverBanner();
+            app.ar.game.reset();
+            app.resetClock();
+            clearHighlightsAR();
+            syncBoardToGameAR();
+            app.updateGameStatusAR();
+            app.bot.isThinking = false;
+        };
+
+        app.playBot = () => {
+            app.resetGameAR(true); state.activeGame = { id: 'bot_match', myColor: 'w', isBot: true }; app.setupBoardForColor('w'); app.showToast("Playing against AI (Level: Medium)", false);
+            const btnFind = getEl('btn-find-match'); const btnBot = getEl('btn-play-bot'); const btnLeave = getEl('btn-leave-match'); const btnChat = getEl('btn-arena-chat'); const btnQuick = getEl('btn-quick-chat');
+            if (btnFind) btnFind.classList.add('hidden');
+            if (btnBot) btnBot.classList.add('hidden');
+            if (btnLeave) { btnLeave.classList.remove('hidden'); btnLeave.innerHTML = 'Resign Match'; }
+            if (btnChat) btnChat.classList.add('hidden');
+            if (btnQuick) btnQuick.classList.add('hidden');
+        };
+
+        app.findMatch = async () => {
+            if (!state.user) return app.showToast("Authenticating... please wait.");
+            const btn = getEl('btn-find-match'); const btnBot = getEl('btn-play-bot');
+            if(btn) { btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-2"></i> Searching...'; btn.disabled = true; renderIcons(); }
+            if(btnBot) btnBot.classList.add('hidden');
+
+            const searchDuration = 3000 + (Math.random() * 2000); // 3 to 5 seconds
+            const startTime = Date.now();
+
+            const searchInterval = setInterval(async () => {
+                try {
+                    await app.fetchPlayers();
+
+                    const available = state.players.filter(p => p.isOnline && p.id !== state.user.uid && !p.isIncognito);
+                    const elapsedTime = Date.now() - startTime;
+
+                    if (available.length > 0 || elapsedTime >= searchDuration) {
+                        clearInterval(searchInterval);
+
+                        if (available.length > 0) {
+                            const target = available[Math.floor(Math.random() * available.length)];
+                            state.matchFormData = { targetId: target.id, targetName: target.name, targetAvatar: target.avatar, location: 'Auto-Match', time: 'Now', format: 'Standard', text: "Let's play!" };
+                            await app.sendMatchRequest(true); // true = silent send
+                            app.showToast(`Challenge sent to ${target.name}! Waiting for them to accept...`, false);
+                            if(btn) btn.innerHTML = 'Waiting...';
+                        } else {
+                            app.showToast("No players found on radar. Try playing the AI!", true);
+                            if(btn) { btn.innerHTML = 'Find Match'; btn.disabled = false; }
+                            if(btnBot) btnBot.classList.remove('hidden');
+                        }
+                    }
+                } catch (e) {
+                    clearInterval(searchInterval);
+                    app.showToast("Error connecting to matchmaking.");
+                    if(btn) { btn.innerHTML = 'Find Match'; btn.disabled = false; }
+                    if(btnBot) btnBot.classList.remove('hidden');
+                }
+            }, 1000);
+        };
+
+        app.setupBoardForColor = (color) => {
+            if (color === 'b') { app.ar.camera.position.set(0, 0.6, -1.2); app.ar.controls.target.set(0, 0.05, 0); }
+            else { app.ar.camera.position.set(0, 0.6, 1.2); app.ar.controls.target.set(0, 0.05, 0); }
+            app.ar.controls.update();
+            app.updateClockUI(); // refresh orientation colors
+        };
+
+        app.leaveMatch = async (isRemoteDisconnect = false) => {
+            if (state.activeGame && !state.activeGame.isBot && !isRemoteDisconnect) {
+                // Send Winner ID to backend for ELO Calculation
+                try {
+                    const msg = state.messages.find(m => m.id === state.activeGame.id);
+                    if (msg) {
+                        const winnerId = state.user.uid === msg.senderId ? msg.recipientId : msg.senderId;
+                        await fetch(`${API_BASE}/messages/${msg.id}`, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ winnerId: winnerId, status: 'completed' }) });
+                    }
+                } catch(e) {}
+            }
+            state.activeGame = null; app.bot.isThinking = false; state.pendingGameId = null;
+
+            // Clean Quick Chat UI
+            if (state.quickChatOpen) app.toggleQuickChat();
+
+            const btnFind = getEl('btn-find-match'); const btnBot = getEl('btn-play-bot'); const btnLeave = getEl('btn-leave-match'); const btnChat = getEl('btn-arena-chat'); const btnQuick = getEl('btn-quick-chat');
+            if (btnFind) { btnFind.classList.remove('hidden'); btnFind.innerHTML = 'Find Match'; btnFind.disabled = false; }
+            if (btnBot) { btnBot.classList.remove('hidden'); }
+            if (btnLeave) btnLeave.classList.add('hidden');
+            if (btnChat) btnChat.classList.add('hidden');
+            if (btnQuick) btnQuick.classList.add('hidden');
+
+            app.resetGameAR(true); app.setupBoardForColor('w'); app.hideGameOverBanner();
+            if (!isRemoteDisconnect) app.showToast("Left the match.", false);
+        };
+
+        function showLegalMovesAR(square) {
+            clearHighlightsAR(); const moves = app.ar.game.moves({ square: square, verbose: true });
+            moves.forEach(move => {
+                const isCapture = move.flags.includes('c') || move.flags.includes('e'); app.ar.currentLegalMoves[move.to] = move;
+                const highlightGeo = new THREE.CylinderGeometry(app.ar.squareSize * 0.4, app.ar.squareSize * 0.4, 0.005, 32);
+                const highlightMat = new THREE.MeshBasicMaterial({ color: isCapture ? 0xff4444 : 0x44ff44, transparent: true, opacity: 0.6 });
+                const highlight = new THREE.Mesh(highlightGeo, highlightMat);
+                const pos = getPositionFromSquareAR(move.to); highlight.position.set(pos.x, 0.015, pos.z); highlight.userData = { isHighlight: true, move: move }; app.ar.highlightGroup.add(highlight);
+            });
+        }
+
+        function clearHighlightsAR() {
+            while (app.ar.highlightGroup.children.length > 0) { const child = app.ar.highlightGroup.children[0]; app.ar.highlightGroup.remove(child); child.geometry.dispose(); child.material.dispose(); }
+            app.ar.currentLegalMoves = {};
+        }
+
+        function onWindowResizeAR() {
+            if(!app.ar.camera || !app.ar.renderer) return;
+            app.ar.camera.aspect = window.innerWidth / window.innerHeight; app.ar.camera.updateProjectionMatrix(); app.ar.renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animateAR() {
+            if(app.ar.controls) app.ar.controls.update();
+
+            app.tickClock(); // Decrement active timer dynamically
+
+            if (app.ar.rainSystem && app.ar.rainSystem.visible) {
+                const positions = app.ar.rainSystem.geometry.attributes.position.array; const vels = app.ar.rainSystem.userData.velocities;
+
+                for(let i=0; i<1500; i++) {
+                    const idx = i*6; const v = vels[i]; const vx = v * 0.15;
+                    positions[idx+1] -= v; positions[idx] -= vx; positions[idx+4] -= v; positions[idx+3] -= vx;
+
+                    if(positions[idx+1] < -0.5) {
+                        const x = (Math.random() - 0.5) * 12; const y = 6 + Math.random() * 4; const z = (Math.random() - 0.5) * 12;
+                        positions[idx] = x; positions[idx+1] = y; positions[idx+2] = z; positions[idx+3] = x - 0.05; positions[idx+4] = y - 0.4; positions[idx+5] = z;
+                    }
+                }
+                app.ar.rainSystem.geometry.attributes.position.needsUpdate = true;
+            }
+            if(app.ar.renderer && app.ar.scene && app.ar.camera) app.ar.renderer.render(app.ar.scene, app.ar.camera);
+        }
+
+        // ==========================================
+        // CALL & MODAL RENDERERS
+        // ==========================================
+        function renderModals() {
+            const activeEl = document.activeElement; const isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+            const activeId = isTyping ? activeEl.id : null; const selectionStart = isTyping ? activeEl.selectionStart : null; const selectionEnd = isTyping ? activeEl.selectionEnd : null;
+            let html = '';
+            if (state.editorData) html += templateEditor(); if (state.matchFormData) html += templateMatchModal(); if (state.activeChat) html += templateChatModal(); if (state.rankedPromoOpen) html += templateRankedPromo(); if (state.premiumPromoOpen) html += templatePremiumPromo();
+            getEl('modals-container').innerHTML = html;
+            if (state.activeChat) { const chatBox = getEl('chat-scroll-box'); if (chatBox) chatBox.scrollTop = chatBox.scrollHeight; }
+            if (activeId) { const el = getEl(activeId); if (el) { el.focus(); if (selectionStart !== null && selectionEnd !== null) { try { el.setSelectionRange(selectionStart, selectionEnd); } catch(e) {} } } }
+            renderIcons();
+        }
+
+        function templatePremiumPromo() {
+            return `
+                <div class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-neutral-950/90 backdrop-blur-md pointer-events-auto">
+                    <div class="bg-neutral-900 border border-yellow-500/50 rounded-3xl w-full max-w-sm flex flex-col shadow-[0_0_30px_rgba(234,179,8,0.2)] relative overflow-hidden text-center">
+                        <div class="absolute top-0 right-0 w-full h-full bg-yellow-500/10 blur-3xl pointer-events-none"></div>
+                        <div class="p-6 sm:p-8 flex-1 relative z-10">
+                            <div class="w-20 h-20 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6 shrink-0 shadow-[0_0_20px_rgba(234,179,8,0.5)]"><i data-lucide="sparkles" class="h-10 w-10 text-neutral-900"></i></div>
+                            <h3 class="text-2xl font-black text-white mb-2 uppercase tracking-wide">Chrono Chess <span class="text-yellow-500">PRO</span></h3>
+                            <p class="text-sm text-neutral-400 mb-6">Unlock the ultimate radar experience with our premium monthly subscription.</p>
+                            <div class="text-left bg-neutral-950 border border-neutral-800 rounded-xl p-4 mb-6">
+                                <ul class="text-xs sm:text-sm text-neutral-300 space-y-3 mb-4 max-h-48 overflow-y-auto pr-2">
+                                    <li class="flex items-start"><i data-lucide="check" class="h-4 w-4 text-green-500 mr-2 shrink-0 mt-0.5"></i> <span><strong>Unlimited Matches</strong> - No daily request caps</span></li>
+                                    <li class="flex items-start"><i data-lucide="check" class="h-4 w-4 text-green-500 mr-2 shrink-0 mt-0.5"></i> <span><strong>City-Wide Radar</strong> - See players anywhere in your city</span></li>
+                                    <li class="flex items-start"><i data-lucide="check" class="h-4 w-4 text-green-500 mr-2 shrink-0 mt-0.5"></i> <span><strong>Host Tournaments</strong> - Create and broadcast local events</span></li>
+                                    <li class="flex items-start"><i data-lucide="check" class="h-4 w-4 text-green-500 mr-2 shrink-0 mt-0.5"></i> <span><strong>Incognito Mode</strong> - Browse the radar invisibly</span></li>
+                                </ul>
+                                <div class="flex justify-between items-center pt-3 border-t border-neutral-800"><span class="text-neutral-500 font-bold text-sm line-through decoration-red-500/50">$9.99/mo</span><span class="text-green-400 font-black text-lg animate-pulse">FREE (Beta)</span></div>
+                            </div>
+                            <button onclick="app.simulatePremiumPurchase()" id="btn-buy-premium" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-600 text-neutral-950 py-4 rounded-xl font-black text-lg hover:from-yellow-300 hover:to-yellow-500 uppercase tracking-wide transition-colors shadow-[0_0_15px_rgba(234,179,8,0.4)] mb-3">Claim Beta Premium</button>
+                            <button onclick="app.closePremiumPromo()" class="w-full text-xs font-bold text-neutral-500 hover:text-white uppercase tracking-wider py-2 transition-colors">Maybe Later</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function templateRankedPromo() {
+            return `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/80 backdrop-blur-md pointer-events-auto">
+                    <div class="bg-neutral-900 border border-neutral-800 rounded-3xl w-full max-w-sm flex flex-col shadow-2xl relative overflow-hidden text-center">
+                        <div class="absolute top-0 right-0 w-full h-full bg-yellow-500/5 blur-3xl pointer-events-none"></div>
+                        <div class="p-6 sm:p-8 flex-1 relative z-10">
+                            <div class="w-20 h-20 bg-yellow-500/10 border border-yellow-500/30 rounded-full flex items-center justify-center mx-auto mb-6 shrink-0 shadow-[0_0_20px_rgba(234,179,8,0.2)]"><i data-lucide="trophy" class="h-10 w-10 text-yellow-500"></i></div>
+                            <h3 class="text-2xl font-black text-white mb-2 uppercase tracking-wide">Ranked Mode</h3>
+                            <p class="text-sm text-neutral-400 mb-6">Unlock competitive matchmaking and play verified Trophy games on the radar.</p>
+                            <div class="text-left bg-neutral-950 border border-neutral-800 rounded-xl p-4 mb-6">
+                                <ul class="text-sm text-neutral-300 space-y-2 mb-4">
+                                    <li class="flex items-center"><i data-lucide="check" class="h-4 w-4 text-green-500 mr-2 shrink-0"></i> Local City Leaderboards</li>
+                                    <li class="flex items-center"><i data-lucide="check" class="h-4 w-4 text-green-500 mr-2 shrink-0"></i> Strict 1v1 Matchmaking</li>
+                                </ul>
+                                <div class="flex justify-between items-center pt-3 border-t border-neutral-800"><div class="flex flex-col"><span class="text-neutral-400 font-bold text-[10px] uppercase">One-time Upgrade</span><span class="text-white font-black text-lg text-yellow-500">$4.99</span></div><div class="text-right"><span class="text-green-500 font-bold text-xs uppercase animate-pulse">Or FREE with PRO</span></div></div>
+                            </div>
+                            <button onclick="app.simulateRankedPurchase()" id="btn-buy-ranked" class="w-full bg-yellow-500 text-neutral-950 py-4 rounded-xl font-black text-lg hover:bg-yellow-400 uppercase tracking-wide transition-colors shadow-[0_0_15px_rgba(234,179,8,0.3)] mb-3">Unlock Now</button>
+                            <button onclick="app.closeRankedPromo()" class="w-full text-xs font-bold text-neutral-500 hover:text-white uppercase tracking-wider py-2 transition-colors mb-2">Maybe Later</button>
+                            <div class="mt-4 pt-4 border-t border-neutral-800 text-center"><button onclick="app.closeRankedPromo(); app.openPremiumPromo();" class="bg-gradient-to-r from-yellow-400 to-yellow-600 text-neutral-900 text-xs font-black py-2 px-4 rounded-lg uppercase tracking-wider flex items-center justify-center w-full hover:from-yellow-300 hover:to-yellow-500 transition-colors shadow-md"><i data-lucide="sparkles" class="w-4 h-4 mr-2"></i> Claim PRO for Free</button></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function templateLeaderboard() {
+            let rankedPlayers = state.players.filter(p => p.hasRanked && ((p.isIncognito !== true && p.isIncognito !== 'true') || p.id === state.user.uid));
+            if (state.myProfile && state.myProfile.hasRanked && !rankedPlayers.some(p => p.id === state.user.uid)) rankedPlayers.push(state.myProfile);
+            rankedPlayers.sort((a, b) => b.elo - a.elo);
+            let listHTML = '';
+            if (rankedPlayers.length === 0) { listHTML = `<div class="p-8 text-center text-neutral-500">No ranked players found in this area. Toggle Ranked on the Radar to be the first!</div>`; }
+            else {
+                listHTML = rankedPlayers.map((p, index) => {
+                    const isMe = p.id === state.user?.uid; const rankInfo = app.getRank(p.elo);
+                    let positionTrophy = ''; if (index === 0) positionTrophy = '<i data-lucide="trophy" class="w-5 h-5 text-yellow-400 mr-2"></i>'; else if (index === 1) positionTrophy = '<i data-lucide="award" class="w-5 h-5 text-gray-300 mr-2"></i>'; else if (index === 2) positionTrophy = '<i data-lucide="award" class="w-5 h-5 text-orange-400 mr-2"></i>'; else positionTrophy = `<span class="w-5 font-black text-neutral-500 mr-2 inline-block text-center">${index + 1}</span>`;
+                    return `
+                        <div onclick="${isMe ? '' : `app.selectPlayer('${app.clean(p.id)}')`}" class="flex items-center justify-between p-4 ${isMe ? 'bg-blue-900/20 border-blue-500/50 shadow-[0_0_15px_rgba(37,99,235,0.1)]' : 'bg-neutral-900 border-neutral-800 hover:bg-neutral-800 cursor-pointer'} border rounded-2xl mb-3 transition-colors min-w-0 pointer-events-auto relative overflow-hidden">
+                            ${p.isPremium ? '<div class="absolute top-0 right-0 w-1 h-full bg-gradient-to-b from-yellow-400 to-yellow-600"></div>' : ''}
+                            <div class="flex items-center overflow-hidden min-w-0 flex-1">
+                                ${positionTrophy}
+                                <div class="relative shrink-0 ml-2"><img src="${app.clean(p.avatar)}" class="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 ${rankInfo.border} bg-neutral-950 ${rankInfo.glow}" />${p.isOnline && (p.isIncognito !== true && p.isIncognito !== 'true') ? `<div class="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border border-neutral-900 rounded-full z-10"></div>` : ''}</div>
+                                <div class="overflow-hidden min-w-0 ml-3 sm:ml-4">
+                                    <h4 class="font-bold text-white text-sm sm:text-base truncate flex items-center gap-2">
+                                        ${app.clean(p.name)}
+                                        ${p.isPremium ? '<span class="bg-gradient-to-r from-yellow-400 to-yellow-600 text-neutral-900 text-[9px] font-black uppercase px-1.5 py-0.5 rounded flex items-center shrink-0"><i data-lucide="sparkles" class="w-3 h-3 mr-0.5"></i> PRO</span>' : ''}
+                                        ${isMe ? '<span class="bg-blue-500 text-xs text-white px-2 py-0.5 rounded uppercase tracking-wider font-black">You</span>' : ''}
+                                    </h4>
+                                    <div class="flex items-center gap-2 mt-0.5"><span class="text-[10px] font-black uppercase tracking-wider ${rankInfo.color} flex items-center"><i data-lucide="${rankInfo.icon}" class="w-3 h-3 mr-1"></i> ${rankInfo.name}</span></div>
+                                </div>
+                            </div>
+                            <div class="text-right shrink-0 ml-4 pr-2"><div class="text-lg sm:text-xl font-black text-white">${app.clean(p.elo.toString())}</div><div class="text-[9px] sm:text-[10px] text-neutral-500 font-bold uppercase tracking-wider">Trophies</div></div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            return `
+                <div class="max-w-4xl mx-auto px-4 py-6 sm:py-8 w-full relative h-full flex flex-col pointer-events-auto">
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-6 sm:mb-8 gap-4 shrink-0">
+                        <div><h2 class="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight flex items-center mb-2"><i data-lucide="bar-chart-2" class="inline h-6 sm:h-8 w-6 sm:w-8 text-yellow-500 mr-3"></i> Top Ranked</h2><p class="text-sm sm:text-base text-neutral-400">The most elite players in your local area.</p></div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto pb-20">${listHTML}</div>
+                </div>
+            `;
+        }
+
+        function templateRadar() {
+            if (!state.myProfile) return '';
+            const isOnline = state.myProfile.isOnline; const rawLoc = state.myProfile.baseLocation || "Unknown Location"; const loc = app.clean(formatLocation(rawLoc)); const isPro = state.myProfile.isPremium;
+            let html = `
+                <div class="absolute inset-0 z-0 overflow-hidden bg-neutral-900 map-interactive pointer-events-auto">
+                    <div id="radar-map" class="absolute inset-0 z-0"></div><div class="absolute inset-0 bg-neutral-950/40 pointer-events-none z-10"></div>
+                </div>
+                <div class="relative z-20 flex flex-col h-full min-h-0 w-full justify-between pointer-events-none">
+            `;
+            if (!isOnline) {
+                html += `
+                    <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto">
+                        <button onclick="app.goOnline()" class="w-32 h-32 rounded-full bg-blue-600 border-4 border-blue-500/30 text-white font-black text-4xl shadow-[0_0_50px_rgba(37,99,235,0.5)] flex items-center justify-center hover:scale-105 transition-transform uppercase tracking-wider relative group">GO<div class="absolute inset-0 rounded-full border-2 border-blue-400 group-hover:animate-ping opacity-50"></div></button>
+                    </div>
+                    <div class="mt-auto mb-4 sm:mb-6 px-4 w-full pointer-events-none">
+                        <div class="pointer-events-auto bg-neutral-900/90 backdrop-blur-md border border-neutral-800 text-white rounded-3xl p-5 shadow-2xl flex justify-between items-center w-full max-w-lg mx-auto">
+                            <div class="flex-1 mr-4 overflow-hidden min-w-0"><h3 class="font-black text-lg sm:text-xl flex items-center truncate">You're offline</h3><p class="text-xs sm:text-sm text-neutral-400 flex items-center mt-1 truncate min-w-0"><i data-lucide="map-pin" class="h-4 w-4 mr-1 text-blue-500 shrink-0"></i> <span class="truncate">${loc}</span></p></div>
+                            <button onclick="app.openEditor()" class="p-3 sm:p-4 bg-neutral-800 rounded-full hover:bg-neutral-700 transition-colors border border-neutral-700 shrink-0"><i data-lucide="settings" class="h-5 w-5 text-neutral-400 shrink-0"></i></button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                let filtered = state.players.filter(p => {
+                    if (!p.isOnline || p.id === state.user.uid) return false;
+                    if (p.isIncognito === true || p.isIncognito === 'true') return false;
+                    if (state.radarFilters.rankedMode) { if (!p.hasRanked) return false; if (Math.abs(p.elo - state.myProfile.elo) > 200) return false; }
+                    if (state.myProfile.coords && p.coords) {
+                        p.calculatedDistance = app.getDistance(state.myProfile.coords.lat, state.myProfile.coords.lng, p.coords.lat, p.coords.lng);
+                        if (!isPro) { if (p.calculatedDistance > 0.5) return false; } else { const limit = state.radarFilters.customRange; if (limit !== 'any' && p.calculatedDistance > parseFloat(limit)) return false; }
+                    } else { p.calculatedDistance = 0; }
+                    return true;
+                });
+                filtered.sort((a,b) => a.calculatedDistance - b.calculatedDistance);
+                html += `
+                    <div class="absolute top-24 left-1/2 transform -translate-x-1/2 pointer-events-auto z-20 w-full max-w-sm px-4 flex flex-col items-center">
+                        <div class="bg-neutral-900/90 backdrop-blur-md border ${state.radarFilters.rankedMode ? 'border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'border-neutral-700'} rounded-full flex p-1 shadow-xl transition-all duration-300 w-full mb-2">
+                            <button onclick="app.setRankedMode(false)" class="flex-1 ${!state.radarFilters.rankedMode ? 'bg-neutral-700 text-white shadow-md' : 'text-neutral-500 hover:text-white'} px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all uppercase tracking-wider">Casual</button>
+                            <button onclick="app.setRankedMode(true)" class="flex-1 ${state.radarFilters.rankedMode ? 'bg-yellow-500 text-neutral-950 shadow-md' : 'text-neutral-500 hover:text-white'} px-4 py-2 rounded-full text-xs sm:text-sm font-black transition-all flex items-center justify-center uppercase tracking-wider"><i data-lucide="trophy" class="w-4 h-4 mr-1.5 shrink-0"></i> Ranked</button>
+                        </div>
+                        ${isPro ? `
+                        <div class="bg-neutral-900/90 backdrop-blur-md border border-yellow-500/30 text-yellow-500 px-3 py-1.5 rounded-xl shadow-[0_0_15px_rgba(234,179,8,0.15)] flex items-center justify-between w-full mt-1"><div class="flex items-center text-[10px] sm:text-xs font-bold uppercase tracking-wider"><i data-lucide="sparkles" class="h-3 w-3 mr-1.5 shrink-0"></i> <span class="truncate">PRO Radar Range</span></div><select onchange="app.setCustomRange(this.value)" class="bg-neutral-950 text-white text-[10px] sm:text-xs font-black uppercase border border-neutral-700 rounded p-1 outline-none ml-2"><option value="1" ${state.radarFilters.customRange === '1' ? 'selected' : ''}>1 Mile</option><option value="5" ${state.radarFilters.customRange === '5' ? 'selected' : ''}>5 Miles</option><option value="10" ${state.radarFilters.customRange === '10' ? 'selected' : ''}>10 Miles</option><option value="25" ${state.radarFilters.customRange === '25' ? 'selected' : ''}>25 Miles</option><option value="50" ${state.radarFilters.customRange === '50' ? 'selected' : ''}>50 Miles</option><option value="any" ${state.radarFilters.customRange === 'any' ? 'selected' : ''}>City-Wide</option></select></div>
+                        ` : `<div class="bg-blue-900/80 backdrop-blur-md border border-blue-500/50 text-blue-100 px-6 py-2 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_20px_rgba(37,99,235,0.3)] flex items-center uppercase tracking-wide whitespace-nowrap cursor-pointer hover:bg-blue-800/90 transition-colors mt-2" onclick="app.openPremiumPromo()"><span class="relative flex h-2 w-2 mr-2 shrink-0"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span></span><i data-lucide="footprints" class="h-3 w-3 mr-1 text-blue-400 opacity-80 shrink-0"></i> <span class="truncate">&lt;10 Min Walk</span> <i data-lucide="lock" class="h-3 w-3 ml-2 text-neutral-400"></i></div>`}
+                    </div>
+                    <div class="mt-auto flex flex-col gap-3 sm:gap-4 pb-4 sm:pb-6 z-20 pointer-events-none">
+                        <div class="pointer-events-auto w-full overflow-x-auto flex gap-4 px-4 snap-x snap-mandatory scrollbar-hide shrink-0">
+                `;
+                if (filtered.length === 0) {
+                     html += `<div class="w-full flex justify-center px-4 shrink-0 snap-center pointer-events-none"><div class="bg-neutral-900/95 backdrop-blur-xl border ${state.radarFilters.rankedMode ? 'border-yellow-500/50' : 'border-blue-500/50'} rounded-full px-6 py-3 sm:py-4 shadow-2xl flex items-center gap-4 relative overflow-hidden pointer-events-auto max-w-md w-full sm:w-auto transition-colors"><div class="relative flex items-center justify-center shrink-0"><i data-lucide="radar" class="h-6 w-6 sm:h-8 sm:w-8 ${state.radarFilters.rankedMode ? 'text-yellow-500' : 'text-blue-500'} relative z-10 animate-spin" style="animation-duration: 3s;"></i><div class="absolute inset-0 ${state.radarFilters.rankedMode ? 'bg-yellow-500' : 'bg-blue-500'} rounded-full animate-ping opacity-30"></div></div><div class="flex-1 min-w-0 text-left"><h3 class="font-black text-white text-sm sm:text-base leading-tight truncate">${state.radarFilters.rankedMode ? 'Scanning for Rivals' : 'Scanning Area'}</h3><p class="text-[10px] sm:text-xs text-neutral-400 truncate">${state.radarFilters.rankedMode ? 'Searching Trophy range ±200...' : (isPro ? 'Searching your selected radius...' : 'Waiting for local players...')}</p></div></div></div>`;
+                } else {
+                     filtered.forEach(p => {
+                         const rawMins = Math.round(p.calculatedDistance * 20); let walkText = rawMins === 0 ? "Right beside you!" : `~${rawMins} min walk`;
+                         if (isPro && p.calculatedDistance > 0.5) { walkText = `${p.calculatedDistance.toFixed(1)} miles away`; }
+                         const rankInfo = app.getRank(p.elo);
+                         html += `
+                            <div onclick="app.selectPlayer('${app.clean(p.id)}')" class="w-[85vw] max-w-[320px] bg-neutral-900/95 backdrop-blur-xl border ${p.isPremium ? 'border-yellow-500/50' : 'border-neutral-800'} rounded-3xl p-5 shadow-2xl shrink-0 snap-center cursor-pointer hover:border-blue-500/50 transition-colors relative overflow-hidden flex flex-col pointer-events-auto">
+                                <div class="absolute top-0 left-0 w-full h-1 ${state.radarFilters.rankedMode ? 'bg-yellow-500' : (p.isPremium ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' : 'bg-blue-500')}"></div>
+                                <div class="flex items-center space-x-4 mb-4 mt-1 min-w-0"><div class="relative shrink-0"><img src="${app.clean(p.avatar)}" class="w-14 h-14 rounded-full object-cover border-2 ${p.hasRanked ? rankInfo.border : 'border-neutral-700'} ${p.hasRanked ? rankInfo.glow : ''}" /><div class="absolute -bottom-1 -right-1 bg-neutral-950 border border-neutral-800 text-neutral-300 text-[9px] font-black px-1 py-0.5 rounded-md flex items-center z-10"><i data-lucide="trophy" class="w-2.5 h-2.5 mr-0.5 text-yellow-500"></i> ${app.clean(p.elo.toString())}</div>${p.isPremium ? `<div class="absolute -top-1 -left-1 bg-neutral-900 border border-yellow-500 rounded-full p-0.5 z-10 text-yellow-500 shadow-sm"><i data-lucide="sparkles" class="w-3 h-3"></i></div>` : ''}</div><div class="overflow-hidden flex-1 min-w-0"><h4 class="font-bold text-white text-lg truncate flex items-center gap-1">${app.clean(p.name)}</h4>${p.hasRanked ? `<p class="text-[10px] font-black uppercase tracking-wider ${rankInfo.color} mb-1 truncate flex items-center"><i data-lucide="${rankInfo.icon}" class="w-3 h-3 mr-1"></i> ${rankInfo.name}</p>` : ''}<p class="text-xs ${p.isPremium && p.calculatedDistance > 0.5 ? 'text-purple-400' : 'text-yellow-500'} font-bold flex items-center truncate"><i data-lucide="${p.isPremium && p.calculatedDistance > 0.5 ? 'car' : 'footprints'}" class="h-3.5 w-3.5 mr-1 shrink-0"></i> <span class="truncate">${walkText}</span></p></div></div>
+                                <div class="bg-neutral-950/80 rounded-xl p-3.5 text-xs sm:text-sm text-neutral-400 border border-neutral-800 line-clamp-2">"${app.clean(p.status)}"</div>
+                            </div>
+                         `;
+                     });
+                }
+                html += `</div>
+                        <div class="px-4 w-full pointer-events-none">
+                            <div class="pointer-events-auto max-w-lg mx-auto bg-neutral-900/95 backdrop-blur-xl border border-neutral-800 rounded-3xl p-4 sm:p-5 shadow-2xl flex justify-between items-center w-full">
+                                <div class="flex items-center gap-3 overflow-hidden min-w-0"><div class="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/30 shrink-0"><i data-lucide="radar" class="h-5 w-5 text-blue-500"></i></div><div class="overflow-hidden pr-2 min-w-0"><h3 class="font-black text-white text-sm sm:text-base leading-tight truncate">Radar Active</h3><p class="text-[10px] sm:text-xs text-blue-400 font-bold truncate mt-0.5">${(state.myProfile.isIncognito === true || state.myProfile.isIncognito === 'true') ? 'You are completely hidden' : 'Visible to nearby players'}</p></div></div>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    ${isPro ? `<button onclick="app.toggleIncognito()" class="${(state.myProfile.isIncognito === true || state.myProfile.isIncognito === 'true') ? 'bg-purple-600 text-white border-purple-500 shadow-[0_0_15px_rgba(147,51,234,0.4)]' : 'bg-neutral-800 text-neutral-400 hover:text-white border-neutral-700'} px-3 py-2 sm:py-3 rounded-xl transition-colors shrink-0 flex items-center justify-center border" title="Incognito Mode"><i data-lucide="ghost" class="h-4 w-4 sm:h-5 sm:w-5"></i></button>` : ''}
+                                    <button onclick="app.goOffline()" class="bg-red-500/10 text-red-500 border border-red-500/30 px-4 sm:px-5 py-2 sm:py-3 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider hover:bg-red-500/20 transition-colors shrink-0">Go Offline</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            html += `</div>`; return html;
+        }
+
+        function templateProfile() {
+            const p = state.selectedPlayer; if (!p) return '';
+            const mapQuery = app.clean(formatLocation(p.baseLocation)); const rankInfo = app.getRank(p.elo); const progress = p.hasRanked ? Math.min(100, Math.max(0, ((p.elo - rankInfo.min) / (rankInfo.next - rankInfo.min)) * 100)) : 0; const losses = p.losses || 0; const totalGames = (p.wins || 0) + losses; const winRate = totalGames > 0 ? Math.round(((p.wins || 0) / totalGames) * 100) : 0;
+            return `
+                <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 animate-in slide-in-from-bottom-4 duration-300 w-full flex-1 pointer-events-auto">
+                    <div class="flex justify-between items-center mb-4 sm:mb-6">
+                        <button onclick="app.setView('radar')" class="flex items-center text-sm font-bold text-neutral-400 hover:text-yellow-500 group uppercase tracking-wider"><i data-lucide="chevron-left" class="h-4 w-4 mr-1 group-hover:-translate-x-1 transition-transform"></i> Back</button>
+                    </div>
+                    ${p.hasRanked ? `<div class="mb-6 sm:mb-8 bg-neutral-900 border ${rankInfo.border} rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row items-center sm:justify-between gap-6 shadow-2xl relative overflow-hidden ${rankInfo.glow}"><div class="flex items-center gap-4"><div class="w-16 h-16 sm:w-20 sm:h-20 ${rankInfo.bg} rounded-2xl border ${rankInfo.border} flex items-center justify-center shrink-0 relative"><i data-lucide="${rankInfo.icon}" class="w-10 h-10 sm:w-12 sm:h-12 ${rankInfo.color}"></i></div><div><div class="text-xs font-black text-neutral-500 uppercase tracking-widest mb-1">Current Rank</div><h2 class="text-2xl sm:text-3xl font-black ${rankInfo.color} uppercase tracking-tight flex items-center">${rankInfo.name} <span class="ml-3 text-white flex items-center"><i data-lucide="trophy" class="w-6 h-6 mr-1.5 text-yellow-500"></i>${app.clean(p.elo.toString())}</span></h2></div></div><div class="w-full sm:w-64 shrink-0"><div class="flex justify-between text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-2"><span>${rankInfo.min}</span><span>Next: ${rankInfo.next}</span></div><div class="h-3 w-full bg-neutral-950 rounded-full border border-neutral-800 overflow-hidden"><div class="h-full ${rankInfo.bg.replace('/20','')} transition-all duration-1000" style="width: ${progress}%"></div></div></div></div>` : ''}
+                    <div class="bg-neutral-900/90 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-neutral-800 shadow-xl relative overflow-hidden mb-6 sm:mb-8">
+                        <div class="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 min-w-0">
+                            <div class="relative shrink-0"><img src="${app.clean(p.avatar)}" class="w-20 h-20 sm:w-32 sm:h-32 rounded-2xl object-cover border-2 ${p.isPremium ? 'border-yellow-500 glow-premium' : (p.hasRanked ? rankInfo.border : 'border-neutral-700')} shadow-lg" /></div>
+                            <div class="flex-1 mt-1 sm:mt-2 w-full overflow-hidden min-w-0"><h1 class="text-xl sm:text-4xl font-black text-white mb-2 flex items-center gap-2 sm:gap-3 flex-wrap min-w-0"><span class="truncate max-w-full min-w-0">${app.clean(p.name)}</span></h1><div class="flex flex-wrap gap-2 mt-2"><span class="bg-neutral-950 border border-yellow-500/30 text-yellow-500 px-3 py-1 rounded-full text-[10px] sm:text-xs font-black uppercase flex items-center shadow-[0_0_10px_rgba(234,179,8,0.1)] shrink-0"><i data-lucide="trophy" class="h-3.5 w-3.5 mr-1.5"></i> ${p.wins || 0} Wins</span></div></div>
+                        </div>
+                        <div class="mt-6 sm:mt-8 bg-yellow-500/5 border border-yellow-500/20 p-4 sm:p-5 rounded-2xl"><p class="text-base sm:text-xl font-bold text-white italic break-words">"${app.clean(p.status)}"</p></div>
+                    </div>
+                    <div class="grid grid-cols-1 gap-6 sm:gap-8 mb-12">
+                        <div class="bg-neutral-900/90 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-neutral-800 shadow-xl flex flex-col justify-between">
+                            <button onclick="app.openMatchModal()" ${!p.isOnline || (p.isIncognito === true || p.isIncognito === 'true') ? 'disabled' : ''} class="w-full ${p.isOnline && (p.isIncognito !== true && p.isIncognito !== 'true') ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)]' : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'} py-3 sm:py-4 rounded-xl font-black text-base sm:text-lg transition-colors uppercase tracking-wide shrink-0">
+                                ${p.isOnline && (p.isIncognito !== true && p.isIncognito !== 'true') ? 'Challenge Player' : 'Player Offline'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function templateMessages() {
+            if (!state.messages || state.messages.length === 0) {
+                return `
+                    <div class="max-w-4xl mx-auto px-4 py-8 flex-1 flex flex-col pointer-events-auto">
+                        <h2 class="text-3xl font-black text-white uppercase mb-6 flex items-center"><i data-lucide="message-square" class="mr-3 text-yellow-500"></i> Inbox</h2>
+                        <div class="bg-neutral-900 border border-neutral-800 rounded-3xl p-12 text-center shadow-xl">
+                            <i data-lucide="inbox" class="h-12 w-12 text-neutral-600 mx-auto mb-4"></i>
+                            <p class="text-neutral-400 font-bold">No messages yet. Challenge players on the Radar!</p>
+                        </div>
+                    </div>
+                `;
+            }
+            let html = `<div class="max-w-4xl mx-auto px-4 py-8 flex-1 flex flex-col pointer-events-auto pb-20"><h2 class="text-3xl font-black text-white uppercase mb-6 flex items-center"><i data-lucide="message-square" class="mr-3 text-yellow-500"></i> Inbox</h2><div class="space-y-4">`;
+            state.messages.forEach(msg => {
+                const isSender = msg.senderId === state.user?.uid;
+                const otherName = isSender ? msg.recipientName : msg.senderName;
+                const otherAvatar = isSender ? msg.recipientAvatar : msg.senderAvatar;
+                const isUnread = !isSender && !msg.read && msg.status === 'pending';
+
+                html += `
+                    <div class="bg-neutral-900/90 backdrop-blur-xl border ${isUnread ? 'border-yellow-500/50' : 'border-neutral-800'} rounded-2xl p-4 sm:p-5 shadow-lg">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-3">
+                                <img src="${app.clean(otherAvatar)}" class="w-10 h-10 rounded-full border border-neutral-700 bg-neutral-950">
+                                <div>
+                                    <h4 class="font-bold text-white">${app.clean(otherName)}</h4>
+                                    <p class="text-xs text-neutral-500 uppercase tracking-wider">${new Date(msg.timestamp * 1000).toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <div class="text-xs font-black uppercase px-2 py-1 rounded ${msg.status === 'accepted' ? 'bg-green-500/20 text-green-500' : (msg.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-neutral-800 text-neutral-400')}">${msg.status}</div>
+                        </div>
+                        <div class="bg-neutral-950 p-3 rounded-xl border border-neutral-800 mb-4 text-sm text-neutral-300">
+                            <span class="text-yellow-500 font-bold mr-1">Location:</span> ${app.clean(msg.location)}<br>
+                            <span class="text-yellow-500 font-bold mr-1">Time:</span> ${app.clean(msg.time)}<br>
+                            <span class="text-yellow-500 font-bold mr-1">Format:</span> ${app.clean(msg.format)}
+                        </div>
+                        <div class="flex gap-2">
+                            ${msg.status === 'pending' && !isSender ? `
+                                <button onclick="app.acceptMatch('${msg.id}')" class="flex-1 bg-yellow-500 hover:bg-yellow-400 text-neutral-900 font-black py-2 rounded-lg text-sm uppercase transition-colors">Accept Challenge</button>
+                                <button onclick="app.updateMsgStatus('${msg.id}', 'declined')" class="flex-1 bg-neutral-800 hover:bg-neutral-700 text-white font-bold py-2 rounded-lg text-sm uppercase transition-colors">Decline</button>
+                            ` : ''}
+                            ${msg.status === 'accepted' ? `
+                                <button onclick="app.enterArena('${msg.id}', '${isSender ? 'w' : 'b'}')" class="w-full bg-yellow-500 hover:bg-yellow-400 text-neutral-900 font-black py-2.5 rounded-lg text-sm uppercase transition-colors flex justify-center items-center gap-2"><i data-lucide="swords" class="w-4 h-4"></i> Enter Arena</button>
+                                <button onclick="app.openChat('${msg.id}')" class="bg-blue-600 hover:bg-blue-500 text-white font-black px-4 py-2.5 rounded-lg text-sm uppercase transition-colors flex justify-center items-center gap-2"><i data-lucide="message-circle" class="w-4 h-4"></i> Chat</button>
+                            ` : ''}
+                            ${msg.status === 'pending' && isSender ? `<button disabled class="w-full bg-neutral-800 text-neutral-500 font-bold py-2 rounded-lg text-sm uppercase cursor-not-allowed">Waiting for Response...</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            html += `</div></div>`; return html;
+        }
+
+        function templateChatModal() {
+            const chat = state.activeChat; const otherName = chat.senderId === state.user.uid ? chat.recipientName : chat.senderName;
+            let logsHtml = '';
+            if (chat.chatLogs && chat.chatLogs.length > 0) {
+                chat.chatLogs.forEach(log => {
+                    if (log.text && log.text.startsWith('FEN:')) return; // Hide board state syncs from UI
+                    if (log.text && log.text.startsWith('QUICK:')) {
+                        // Display Quick chat inside the chat box too
+                        log.text = log.text.substring(6);
+                    }
+                    const isMe = log.senderId === state.user.uid; const isSys = log.senderId === 'system';
+                    const timeStr = new Date(log.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    if (isSys) { logsHtml += `<div class="text-center my-3"><span class="bg-neutral-800 text-neutral-400 text-[10px] uppercase px-3 py-1 rounded-full font-bold">${app.clean(log.text)}</span></div>`; }
+                    else {
+                        logsHtml += `<div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} mb-3">
+                                        <div class="max-w-[75%] rounded-2xl px-4 py-2 text-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-neutral-800 text-neutral-200 rounded-bl-none border border-neutral-700'}">${app.clean(log.text)}</div>
+                                        <span class="text-[10px] text-neutral-500 mt-1 font-bold">${timeStr}</span>
+                                     </div>`;
+                    }
+                });
+            } else { logsHtml = `<div class="text-center text-neutral-500 text-sm mt-10">Start the conversation!</div>`; }
+
+            return `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-neutral-950/80 backdrop-blur-md pointer-events-auto">
+                    <div class="bg-neutral-900 border border-neutral-800 sm:rounded-3xl w-full h-[100dvh] sm:h-[80vh] max-w-lg flex flex-col shadow-2xl relative overflow-hidden">
+                        <div class="p-4 border-b border-neutral-800 flex justify-between items-center bg-neutral-950 shrink-0 shadow-md z-10">
+                            <div class="flex items-center gap-3"><button onclick="app.closeChat()" class="text-neutral-400 hover:text-white"><i data-lucide="arrow-left" class="w-5 h-5"></i></button><h3 class="font-black text-white text-lg">${app.clean(otherName)}</h3></div>
+                        </div>
+                        <div id="chat-scroll-box" class="flex-1 overflow-y-auto p-4 bg-neutral-950/50 flex flex-col">${logsHtml}</div>
+                        <div class="p-3 border-t border-neutral-800 bg-neutral-950 shrink-0">
+                            <form onsubmit="app.sendChatMessage(event)" class="flex gap-2 relative">
+                                <input type="text" id="chat-input-text" placeholder="Message..." class="flex-1 bg-neutral-900 border border-neutral-700 rounded-full px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 pr-12">
+                                <button type="submit" class="absolute right-1.5 top-1.5 bottom-1.5 bg-blue-600 hover:bg-blue-500 text-white w-9 rounded-full flex items-center justify-center transition-colors"><i data-lucide="send" class="w-4 h-4 ml-0.5"></i></button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function templateMatchModal() {
+            const md = state.matchFormData;
+            return `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/80 backdrop-blur-md pointer-events-auto">
+                    <div class="bg-neutral-900 border border-neutral-800 rounded-3xl w-full max-w-sm flex flex-col shadow-2xl relative overflow-hidden">
+                        <div class="p-5 border-b border-neutral-800 flex justify-between items-center bg-neutral-950">
+                            <h3 class="text-lg font-black text-white uppercase tracking-wide flex items-center"><i data-lucide="swords" class="w-5 h-5 mr-2 text-yellow-500"></i> Challenge</h3>
+                            <button onclick="app.closeMatchModal()" class="text-neutral-500 hover:text-white bg-neutral-800 rounded-full p-1"><i data-lucide="x" class="h-4 w-4"></i></button>
+                        </div>
+                        <div class="p-5 space-y-4">
+                            <div class="flex items-center gap-3 bg-neutral-950 p-3 rounded-xl border border-neutral-800">
+                                <img src="${app.clean(md.targetAvatar)}" class="w-12 h-12 rounded-full border border-neutral-700">
+                                <div><p class="text-xs text-neutral-500 font-bold uppercase">Opponent</p><p class="text-white font-bold">${app.clean(md.targetName)}</p></div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-neutral-400 mb-1 uppercase">Location</label>
+                                <input type="text" value="${app.clean(md.location)}" oninput="app.matchFormData.location = this.value" class="w-full bg-neutral-950 border border-neutral-700 p-3 rounded-xl text-white outline-none focus:border-yellow-500 text-sm">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div><label class="block text-xs font-bold text-neutral-400 mb-1 uppercase">Time</label><input type="text" value="${app.clean(md.time)}" oninput="app.matchFormData.time = this.value" class="w-full bg-neutral-950 border border-neutral-700 p-3 rounded-xl text-white outline-none focus:border-yellow-500 text-sm"></div>
+                                <div><label class="block text-xs font-bold text-neutral-400 mb-1 uppercase">Format</label><input type="text" value="${app.clean(md.format)}" oninput="app.matchFormData.format = this.value" class="w-full bg-neutral-950 border border-neutral-700 p-3 rounded-xl text-white outline-none focus:border-yellow-500 text-sm"></div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-neutral-400 mb-1 uppercase">Message</label>
+                                <textarea oninput="app.matchFormData.text = this.value" class="w-full bg-neutral-950 border border-neutral-700 p-3 rounded-xl text-white outline-none focus:border-yellow-500 text-sm resize-none" rows="2">${app.clean(md.text)}</textarea>
+                            </div>
+                            <button onclick="app.sendMatchRequest()" id="btn-send-match" class="w-full bg-yellow-500 hover:bg-yellow-400 text-neutral-900 font-black py-3.5 rounded-xl uppercase tracking-wide transition-colors mt-2 shadow-[0_0_15px_rgba(234,179,8,0.3)]">Send Challenge</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function templateEditor() {
+            const fd = state.editorData; const isSaving = fd.saving;
+            return `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-neutral-950/80 backdrop-blur-md">
+                    <div class="bg-neutral-900 border border-neutral-800 sm:rounded-3xl w-full h-[100dvh] sm:h-auto sm:max-h-[90vh] max-w-lg flex flex-col shadow-2xl relative overflow-hidden">
+                        <div class="p-4 sm:p-6 border-b border-neutral-800 flex justify-between items-center bg-neutral-950 shrink-0"><h3 class="text-lg sm:text-xl font-black text-white uppercase tracking-wide truncate pr-4">Edit Profile</h3><button onclick="app.closeEditor()" class="text-neutral-500 hover:text-white bg-neutral-800 rounded-full p-1.5 shrink-0"><i data-lucide="x" class="h-5 w-5"></i></button></div>
+                        <div class="p-4 sm:p-6 space-y-4 sm:space-y-6 flex-1 min-h-0 overflow-y-auto w-full">
+                            <div><label class="block text-xs sm:text-sm font-bold text-neutral-400 mb-1 sm:mb-2 uppercase tracking-wider">Display Name</label><input type="text" id="editor-name" value="${app.clean(fd.name) || ''}" oninput="app.updateEditor('name', this.value)" class="w-full p-3 sm:p-3.5 rounded-xl border border-neutral-700 bg-neutral-950 text-white focus:ring-1 focus:ring-yellow-500 outline-none text-sm sm:text-base min-w-0"></div>
+                            <div><label class="block text-xs sm:text-sm font-bold text-neutral-400 mb-1 sm:mb-2 uppercase tracking-wider">Status Statement</label><input type="text" id="editor-status" value="${app.clean(fd.status) || ''}" oninput="app.updateEditor('status', this.value)" class="w-full p-3 sm:p-3.5 rounded-xl border border-neutral-700 bg-neutral-950 text-white focus:ring-1 focus:ring-yellow-500 outline-none text-sm sm:text-base placeholder:truncate min-w-0"></div>
+                            <div class="pt-4 sm:pt-6 border-t border-neutral-800 mt-4 sm:mt-6 shrink-0"><button onclick="app.signOut()" class="w-full bg-red-500/10 text-red-500 py-3 sm:py-3.5 rounded-xl font-black text-xs sm:text-sm hover:bg-red-500/20 uppercase tracking-wide border border-red-500/30 transition-colors">Log Out Account</button></div>
+                        </div>
+                        <div class="p-4 sm:p-6 border-t border-neutral-800 bg-neutral-950 shrink-0 pb-8 sm:pb-6"><button onclick="app.saveProfile()" class="w-full bg-yellow-500 text-neutral-950 py-3 sm:py-4 rounded-xl font-black text-base sm:text-lg hover:bg-yellow-400 uppercase tracking-wide transition-colors">${isSaving ? 'Saving...' : 'Save Profile'}</button></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- WINDOW EXPORTED ACTIONS ---
+        app.setView = (view) => { if (state.mainSubView === 'arena' && view !== 'arena') app.stopAR(); state.mainSubView = view; updateMainView(); };
+        app.openLeaderboard = () => { if (!state.myProfile.hasRanked) { state.rankedPromoOpen = true; renderModals(); return; } app.setView('leaderboard'); };
+        app.openPremiumPromo = () => { state.premiumPromoOpen = true; renderModals(); };
+        app.closePremiumPromo = () => { state.premiumPromoOpen = false; renderModals(); };
+
+        app.patchProfile = async (updates) => {
+            if (!state.user) return;
+            try {
+                await fetch(`${API_BASE}/players/${state.user.uid}`, {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(updates)
+                });
+                if (state.myProfile) Object.assign(state.myProfile, updates);
+            } catch(e) {}
+        };
+
+        app.simulatePremiumPurchase = async () => {
+            const btn = getEl('btn-buy-premium'); if (btn) { btn.disabled = true; btn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin mx-auto inline"></i> Processing...`; renderIcons(); }
+            setTimeout(async () => {
+                await app.patchProfile({ isPremium: true, hasRanked: true });
+                state.premiumPromoOpen = false; state.rankedPromoOpen = false; state.radarFilters.rankedMode = true; app.showToast("Welcome to Chrono Chess PRO!", false); renderModals(); renderMainContent(); updateNav();
+            }, 800);
+        };
+
+        app.setCustomRange = (val) => { state.radarFilters.customRange = val; renderMainContent(); };
+        app.toggleIncognito = async () => { const newState = !state.myProfile.isIncognito; await app.patchProfile({ isIncognito: newState }); app.showToast(newState ? "Incognito Mode ON" : "Incognito Mode OFF", false); renderMainContent(); };
+        app.setRankedMode = async (val) => { if (val && !state.myProfile.hasRanked) { state.rankedPromoOpen = true; renderModals(); return; } state.radarFilters.rankedMode = val; renderMainContent(); };
+        app.closeRankedPromo = () => { state.rankedPromoOpen = false; renderModals(); };
+        app.simulateRankedPurchase = async () => { await app.patchProfile({ hasRanked: true }); state.rankedPromoOpen = false; state.radarFilters.rankedMode = true; app.showToast("Ranked Mode Unlocked!", false); renderModals(); renderMainContent(); };
+        app.selectPlayer = (id) => { state.selectedPlayer = state.players.find(p => p.id === id); state.mainSubView = 'profile'; updateMainView(); };
+
+        app.handleGoogleSignIn = async () => {
+            try {
+                const provider = new GoogleAuthProvider();
+                await signInWithPopup(auth, provider);
+            } catch (err) {
+                getEl('auth-error').textContent = "Sign in cancelled.";
+                getEl('auth-error').classList.remove('hidden');
+            }
+        };
+
+        app.handleConnect = async () => {
+            const username = getEl('input-username').value.trim();
+            const errEl = getEl('profile-error');
+            const btn = getEl('btn-connect');
+
+            if (!username) {
+                if (errEl) { errEl.textContent = "Please enter a display name."; errEl.classList.remove('hidden'); }
+                return;
+            }
+            if (!state.user) return; // Wait for firebase auth
+
+            if(btn) { btn.disabled = true; btn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 mr-2 animate-spin shrink-0"></i> Creating Profile...`; renderIcons(); }
+            if (errEl) errEl.classList.add('hidden');
+
+            const uid = state.user.uid;
+            const seedStr = state.user.isAnonymous ? uid : (state.user.email || uid);
+
+            const newProfile = {
+                id: uid, name: username, avatar: `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${seedStr}&backgroundColor=eab308`,
+                status: 'Looking for a game!', baseLocation: 'Local Area', isOnline: true, elo: 1200, wins: 0, losses: 0, hasRanked: false
+            };
+
+            try {
+                await fetch(`${API_BASE}/players`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(newProfile)
+                });
+
+                state.myProfile = newProfile;
+                app.goOnline(); // Get GPS & Patch
+                state.currentView = 'main';
+
+                initWebSocket(uid);
+                app.fetchMessages();
+                app.fetchPlayers();
+
+                updateMainView();
+            } catch(e) {
+                if (errEl) { errEl.textContent = "Connection to server failed."; errEl.classList.remove('hidden'); }
+                if (btn) { btn.disabled = false; btn.innerHTML = 'Enter Arena'; }
+            }
+        };
+
+        app.authMode = 'login';
+
+        app.toggleAuthMode = () => {
+            app.authMode = app.authMode === 'login' ? 'signup' : 'login';
+            const btnAuth = getEl('btn-email-auth');
+            const btnToggle = getEl('btn-toggle-auth');
+            if(btnAuth) btnAuth.innerText = app.authMode === 'login' ? 'Sign In' : 'Create Account';
+            if(btnToggle) btnToggle.innerText = app.authMode === 'login' ? 'Need an account? Sign Up' : 'Already have an account? Sign In';
+        };
+
+        app.handleEmailAuth = async () => {
+            const email = getEl('input-email').value.trim();
+            const password = getEl('input-password').value;
+            const errEl = getEl('auth-error');
+            if(errEl) errEl.classList.add('hidden');
+
+            if (!email || !password) {
+                if(errEl) { errEl.innerText = "Email and password are required."; errEl.classList.remove('hidden'); }
+                return;
+            }
+
+            const btn = getEl('btn-email-auth');
+            const originalText = btn.innerText;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>`;
+            renderIcons();
+
+            try {
+                if (app.authMode === 'login') {
+                    await signInWithEmailAndPassword(auth, email, password);
+                } else {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                }
+            } catch (error) {
+                if(errEl) {
+                    errEl.innerText = error.message.replace('Firebase: ', '');
+                    errEl.classList.remove('hidden');
+                }
+                btn.innerText = originalText;
+            }
+        };
+
+        app.handleGuestPlay = async () => {
+            const errEl = getEl('auth-error');
+            if(errEl) errEl.classList.add('hidden');
+            const btn = getEl('btn-guest-play');
+            const originalText = btn.innerText;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-2"></i> Connecting...`;
+            renderIcons();
+
+            try {
+                await signInAnonymously(auth);
+            } catch(e) {
+                if(errEl) { errEl.innerText = "Failed to create guest session."; errEl.classList.remove('hidden'); }
+                btn.innerText = originalText;
+            }
+        };
+
+        app.signOut = async () => {
+            try {
+                if (state.myProfile && state.myProfile.isOnline) await app.goOffline();
+                await signOut(auth);
+                state.user = null; state.myProfile = null; app.closeEditor(); state.currentView = 'onboarding'; updateMainView();
+            } catch (err) {}
+        };
+
+        app.goOnline = () => { if (!navigator.geolocation) return; navigator.geolocation.getCurrentPosition(async (pos) => { await app.patchProfile({ isOnline: true, coords: { lat: pos.coords.latitude, lng: pos.coords.longitude } }); updateMainView(); app.showToast("You are now online!", false); }, () => {}, { enableHighAccuracy: true }); };
+        app.goOffline = async () => { await app.patchProfile({ isOnline: false }); updateMainView(); };
+        app.openEditor = () => { const p = state.myProfile; if (!p) return; state.editorData = { saving: false, name: p.name || '', status: p.status || '', avatar: p.avatar || '' }; renderModals(); };
+        app.closeEditor = () => { state.editorData = null; renderModals(); };
+        app.updateEditor = (field, val) => { if (!state.editorData) return; state.editorData[field] = val; };
+        app.saveProfile = async () => { if (!state.editorData) return; state.editorData.saving = true; renderModals(); await app.patchProfile({ name: state.editorData.name, status: state.editorData.status }); state.editorData = null; renderModals(); renderMainContent(); updateNav(); };
+
+        // Fetching handles replacing snapshot listeners
+        app.fetchPlayers = async () => {
+            if (!state.user) return;
+            try {
+                const res = await fetch(`${API_BASE}/players`);
+                if (res.ok) {
+                    state.players = await res.json();
+                    if (state.mainSubView === 'radar' || state.mainSubView === 'leaderboard') renderMainContent();
+                }
+            } catch(e) {}
+        };
+
+        app.fetchMessages = async () => {
+            if (!state.user) return;
+            try {
+                const res = await fetch(`${API_BASE}/messages/${state.user.uid}`);
+                if (res.ok) {
+                    state.messages = await res.json();
+
+                    const unreadCount = state.messages.filter(m => m.recipientId === state.user.uid && !m.read && m.status === 'pending').length;
+                    const badge = getEl('unread-badge');
+                    if (badge) {
+                        if (unreadCount > 0) { badge.textContent = unreadCount; badge.classList.remove('hidden'); }
+                        else { badge.classList.add('hidden'); }
+                    }
+
+                    if (state.activeChat) {
+                        const updated = state.messages.find(m => m.id === state.activeChat.id);
+                        if (updated) { state.activeChat = updated; renderModals(); }
+                    }
+
+                    // Auto-start game if a pending match request was accepted
+                    if (state.pendingGameId) {
+                        const startedMsg = state.messages.find(m => m.id === state.pendingGameId && m.status === 'accepted');
+                        if (startedMsg) {
+                            state.pendingGameId = null; state.activeGame = { id: startedMsg.id, myColor: 'w', isBot: false };
+                            app.setupBoardForColor('w'); app.setView('arena'); app.showToast("Opponent accepted! You play as White.", false);
+                        }
+                    }
+
+                    if (state.mainSubView === 'messages') renderMainContent();
+                }
+            } catch (e) { console.warn("Network error fetching messages."); }
+        };
+
+        app.openMatchModal = () => {
+            const p = state.selectedPlayer; if (!p) return;
+            state.matchFormData = { targetId: p.id, targetName: p.name, targetAvatar: p.avatar, location: 'Arena Match', time: 'Now', format: 'Standard Chess', text: 'Let us play a game!' };
+            renderModals();
+        };
+
+        app.closeMatchModal = () => { state.matchFormData = null; renderModals(); };
+
+        app.sendMatchRequest = async (silent = false) => {
+            if (!state.user || !state.matchFormData) return;
+            const btn = getEl('btn-send-match');
+            if (btn) btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin inline"></i> Sending...';
+
+            try {
+                const res = await fetch(`${API_BASE}/messages`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        senderId: state.user.uid, recipientId: state.matchFormData.targetId, senderName: state.myProfile.name, recipientName: state.matchFormData.targetName,
+                        senderAvatar: state.myProfile.avatar, recipientAvatar: state.matchFormData.targetAvatar, text: state.matchFormData.text, location: state.matchFormData.location, time: state.matchFormData.time, format: state.matchFormData.format
+                    })
+                });
+                const data = await res.json();
+                state.pendingGameId = data.messageId; // Track this to auto-start when accepted
+
+                if (!silent) app.showToast("Challenge sent successfully!", false);
+                app.closeMatchModal();
+                app.fetchMessages();
+            } catch (e) {
+                if (!silent) app.showToast("Network error. Challenge not sent.", true);
+                if (btn) btn.innerHTML = 'Send Challenge';
+            }
+        };
+
+        app.updateMsgStatus = async (msgId, status) => {
+            try {
+                await fetch(`${API_BASE}/messages/${msgId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: status, read: true })
+                });
+                app.fetchMessages();
+            } catch (e) { app.showToast("Failed to update status.", true); }
+        };
+
+        app.acceptMatch = async (msgId) => {
+            await app.updateMsgStatus(msgId, 'accepted');
+            state.activeGame = { id: msgId, myColor: 'b', isBot: false };
+            app.setupBoardForColor('b'); app.setView('arena'); app.showToast("Match accepted! You play as Black.", false);
+            // Setup UI buttons
+            const btnFind = getEl('btn-find-match'); const btnBot = getEl('btn-play-bot'); const btnLeave = getEl('btn-leave-match'); const btnChat = getEl('btn-arena-chat'); const btnQuick = getEl('btn-quick-chat');
+            if (btnFind) btnFind.classList.add('hidden');
+            if (btnBot) btnBot.classList.add('hidden');
+            if (btnLeave) { btnLeave.classList.remove('hidden'); btnLeave.innerHTML = 'Resign Match'; }
+            if (btnChat) btnChat.classList.remove('hidden');
+            if (btnQuick) btnQuick.classList.remove('hidden');
+        };
+
+        app.enterArena = (msgId, color) => {
+            state.activeGame = { id: msgId, myColor: color, isBot: false };
+            app.setupBoardForColor(color); app.setView('arena');
+            // Setup UI buttons
+            const btnFind = getEl('btn-find-match'); const btnBot = getEl('btn-play-bot'); const btnLeave = getEl('btn-leave-match'); const btnChat = getEl('btn-arena-chat'); const btnQuick = getEl('btn-quick-chat');
+            if (btnFind) btnFind.classList.add('hidden');
+            if (btnBot) btnBot.classList.add('hidden');
+            if (btnLeave) { btnLeave.classList.remove('hidden'); btnLeave.innerHTML = 'Resign Match'; }
+            if (btnChat) btnChat.classList.remove('hidden');
+            if (btnQuick) btnQuick.classList.remove('hidden');
+        };
+
+        app.openChat = (msgId) => {
+            const msg = state.messages.find(m => m.id === msgId);
+            if (msg) {
+                state.activeChat = msg; renderModals();
+                if (msg.recipientId === state.user.uid && !msg.read) {
+                    fetch(`${API_BASE}/messages/${msgId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ read: true })
+                    }).then(() => app.fetchMessages()).catch(e => console.warn(e));
+                }
+            }
+        };
+
+        app.openCurrentGameChat = () => {
+            if (state.activeGame && !state.activeGame.isBot) {
+                app.openChat(state.activeGame.id);
+            }
+        };
+
+        app.closeChat = () => { state.activeChat = null; renderModals(); };
+
+        app.toggleQuickChat = () => {
+            const menu = getEl('quick-chat-menu');
+            if (menu) {
+                state.quickChatOpen = !state.quickChatOpen;
+                if (state.quickChatOpen) {
+                    menu.classList.remove('hidden');
+                    menu.classList.add('flex');
+                } else {
+                    menu.classList.add('hidden');
+                    menu.classList.remove('flex');
+                }
+            }
+        };
+
+        app.sendQuickChat = async (phrase) => {
+            app.toggleQuickChat(); // close menu
+            if (!state.activeGame || state.activeGame.isBot || !state.user) return;
+
+            // Send the QUICK: prefixed phrase
+            try {
+                await fetch(`${API_BASE}/messages/${state.activeGame.id}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ senderId: state.user.uid, text: 'QUICK:' + phrase })
+                });
+
+                // Show it for ourselves immediately
+                app.showToast(`You: ${phrase}`, false);
+
+                // We don't necessarily need to fetchMessages if we don't have the chat modal open,
+                // but we keep the state in sync just in case.
+                app.fetchMessages();
+            } catch(e) { app.showToast("Failed to send quick chat.", true); }
+        };
+
+        app.sendChatMessage = async (event) => {
+            if (event) event.preventDefault();
+            const input = getEl('chat-input-text'); if (!input || !input.value.trim() || !state.activeChat || !state.user) return;
+            const text = input.value.trim(); input.value = '';
+            try {
+                await fetch(`${API_BASE}/messages/${state.activeChat.id}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ senderId: state.user.uid, text: text })
+                });
+                app.fetchMessages();
+            } catch(e) { app.showToast("Failed to send message.", true); }
+        };
+
+        if (auth) {
+            initAuth();
+
+            onAuthStateChanged(auth, async (user) => {
+                state.user = user;
+                if (user) {
+                    try {
+                        const res = await fetch(`${API_BASE}/players/${user.uid}`);
+                        if (res.ok) {
+                            state.myProfile = await res.json();
+                            state.currentView = 'main';
+
+                            initWebSocket(user.uid);
+                            app.fetchMessages();
+                            app.fetchPlayers();
+                        } else {
+                            // Profile not created yet
+                            state.currentView = 'onboarding';
+                            getEl('onboard-step-auth').classList.add('hidden');
+                            getEl('onboard-step-profile').classList.remove('hidden');
+                        }
+                    } catch(e) {
+                        state.currentView = 'onboarding';
+                        getEl('onboard-step-auth').classList.add('hidden');
+                        getEl('onboard-step-profile').classList.remove('hidden');
+                    }
+                    updateMainView();
+                } else {
+                    if (ws) { ws.close(); ws = null; }
+                    state.currentView = 'onboarding';
+                    state.myProfile = null;
+                    // Reset to Auth Step
+                    const authStep = getEl('onboard-step-auth');
+                    const profileStep = getEl('onboard-step-profile');
+                    if(authStep) authStep.classList.remove('hidden');
+                    if(profileStep) profileStep.classList.add('hidden');
+                    updateMainView();
+                }
+            });
+        }
+
+    </script>
+</body>
+</html>
