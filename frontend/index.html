@@ -223,8 +223,9 @@
         const isLocalFile = window.location.protocol === 'file:' || window.location.port === '5500' || window.location.port === '3000';
         const isLocalHost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 
-        let API_BASE = "/api";
-        let WS_BASE = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
+        // HARDCODED RENDER BACKEND URLS (Step 4)
+        let API_BASE = "https://chrono-chess-backend.onrender.com/api";
+        let WS_BASE = "wss://chrono-chess-backend.onrender.com/ws";
 
         // If running locally or within the Canvas iframe (blob:), default to local backend
         if (isLocalFile || window.location.protocol === 'blob:' || isLocalHost) {
